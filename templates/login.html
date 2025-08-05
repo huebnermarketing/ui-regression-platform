@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - White Label IQ</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <!-- Logo/Icon -->
+            <div class="logo-container">
+                <div class="logo-icon">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+            </div>
+            
+            <!-- Title and Subtitle -->
+            <div class="login-header">
+                <h1 class="login-title">White Label IQ</h1>
+                <p class="login-subtitle">Sign in to your enterprise account</p>
+            </div>
+            
+            <!-- Flash messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'error' if category == 'error' else 'success' if category == 'success' else 'info' }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <!-- Login Form -->
+            <form method="POST" class="login-form">
+                <div class="form-group">
+                    <label for="username" class="form-label">Username</label>
+                    <input type="text" class="form-input" id="username" name="username" placeholder="Enter your username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password" class="form-label">Password</label>
+                    <div class="password-input-container">
+                        <input type="password" class="form-input" id="password" name="password" placeholder="Enter your password" required>
+                        <button type="button" class="password-toggle" onclick="togglePassword()">
+                            <i class="fas fa-eye" id="password-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-options">
+                    <div class="remember-me">
+                        <input type="checkbox" id="remember" name="remember" class="checkbox">
+                        <label for="remember" class="checkbox-label">Remember me</label>
+                    </div>
+                    <a href="#" class="forgot-password">Forgot password?</a>
+                </div>
+                
+                <button type="submit" class="sign-in-btn">
+                    Sign In
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </form>
+            
+            <!-- Registration Link -->
+            <div class="register-link">
+                <p>Don't have an account? <a href="{{ url_for('register') }}" class="register-link-text">Create one</a></p>
+            </div>
+            
+            <!-- Footer -->
+            <div class="login-footer">
+                <p class="security-text">Protected by enterprise security protocols</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const passwordEye = document.getElementById('password-eye');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                passwordEye.classList.remove('fa-eye');
+                passwordEye.classList.add('fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                passwordEye.classList.remove('fa-eye-slash');
+                passwordEye.classList.add('fa-eye');
+            }
+        }
+    </script>
+</body>
+</html>
