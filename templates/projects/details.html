@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project.name }} - UI Diff Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .url-cell {
+            max-width: 250px;
+            word-break: break-all;
+        }
+        .page-name-cell {
+            max-width: 200px;
+            font-weight: 500;
+        }
+        .status-badge {
+            font-size: 0.8em;
+        }
+        .crawl-status {
+            border-left: 4px solid #007bff;
+            background-color: #f8f9fa;
+        }
+        .progress-container {
+            margin-top: 10px;
+        }
+        .search-filters {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .pagination-info {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                <i class="bi bi-eye-fill me-2"></i>
+                UI Diff Dashboard
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text me-3">
+                    Welcome, {{ current_user.username }}!
+                </span>
+                <a class="nav-link" href="{{ url_for('logout') }}">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' if category == 'success' else 'info' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Project Header -->
+        <div class="row mb-4">
+            <div class="col">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h1 class="display-6">{{ project.name }}</h1>
+                        <p class="lead text-muted">Project Details & Page Management</p>
+                        <small class="text-muted">
+                            <i class="bi bi-calendar3 me-1"></i>
+                            Created: {{ project.created_at.strftime('%Y-%m-%d %H:%M') }}
+                        </small>
+                    </div>
+                    <div class="text-end">
+                        <a href="{{ url_for('projects_list') }}" class="btn btn-outline-secondary me-2">
+                            <i class="bi bi-arrow-left me-1"></i>Back to Projects
+                        </a>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                                <i class="bi bi-trash me-1"></i>Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Project Info -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-globe me-2"></i>Staging Environment
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <a href="{{ project.staging_url }}" target="_blank" class="text-break">
+                            {{ project.staging_url }}
+                            <i class="bi bi-box-arrow-up-right ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-globe2 me-2"></i>Production Environment
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <a href="{{ project.production_url }}" target="_blank" class="text-break">
+                            {{ project.production_url }}
+                            <i class="bi bi-box-arrow-up-right ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Crawl Status & Actions -->
+        <div class="row mb-4">
+            <div class="col">
+                <div class="card crawl-status">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h6 class="mb-1">
+                                    <i class="bi bi-robot me-2"></i>Crawl Status
+                                </h6>
+                                <div id="crawlStatus">
+                                    {% if job_status.status == 'scheduled' %}
+                                        <span class="badge bg-warning">
+                                            <i class="bi bi-clock me-1"></i>Crawling in progress...
+                                        </span>
+                                    {% elif pages %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle me-1"></i>{{ pagination.total if pagination else pages|length }} pages discovered
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="bi bi-dash-circle me-1"></i>No crawl performed yet
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">
+                                    Last updated: <span id="lastUpdated">Just now</span>
+                                </small>
+                                <!-- Progress Bar -->
+                                <div id="progressContainer" class="progress-container" style="display: none;">
+                                    <div class="progress mb-2">
+                                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                             role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                    <small id="progressMessage" class="text-muted">Initializing...</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                {% if job_status.status == 'scheduled' %}
+                                    <form method="POST" action="{{ url_for('cancel_crawl', project_id=project.id) }}" class="d-inline">
+                                        <button type="submit" class="btn btn-outline-warning">
+                                            <i class="bi bi-stop-circle me-1"></i>Cancel Crawl
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <form method="POST" action="{{ url_for('start_crawl', project_id=project.id) }}" class="d-inline">
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="bi bi-play-circle me-1"></i>Start Crawling
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search and Filter Section -->
+        {% if pages or search_query or status_filter %}
+        <div class="search-filters">
+            <form method="GET" action="{{ url_for('project_details', project_id=project.id) }}">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label for="search" class="form-label">
+                            <i class="bi bi-search me-1"></i>Search Pages
+                        </label>
+                        <input type="text" class="form-control" id="search" name="search" 
+                               value="{{ search_query }}" placeholder="Search by path, title, or URL...">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="status" class="form-label">
+                            <i class="bi bi-funnel me-1"></i>Filter by Status
+                        </label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="">All Statuses</option>
+                            {% for status in available_statuses %}
+                                <option value="{{ status }}" {{ 'selected' if status == status_filter else '' }}>
+                                    {{ status.title() }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="per_page" class="form-label">Per Page</label>
+                        <select class="form-select" id="per_page" name="per_page">
+                            <option value="10" {{ 'selected' if per_page == 10 else '' }}>10</option>
+                            <option value="20" {{ 'selected' if per_page == 20 else '' }}>20</option>
+                            <option value="50" {{ 'selected' if per_page == 50 else '' }}>50</option>
+                            <option value="100" {{ 'selected' if per_page == 100 else '' }}>100</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="bi bi-search me-1"></i>Apply Filters
+                        </button>
+                        <a href="{{ url_for('project_details', project_id=project.id) }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle me-1"></i>Clear
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+        {% endif %}
+
+        <!-- Pages Table -->
+        <div class="row">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-list-ul me-2"></i>Discovered Pages
+                                {% if pagination %}
+                                    <span class="badge bg-primary ms-2">{{ pagination.total }}</span>
+                                {% elif pages %}
+                                    <span class="badge bg-primary ms-2">{{ pages|length }}</span>
+                                {% endif %}
+                            </h5>
+                            {% if pages %}
+                                <button class="btn btn-outline-primary btn-sm" disabled>
+                                    <i class="bi bi-eye-fill me-1"></i>Proceed to Diff (Phase 3)
+                                </button>
+                            {% endif %}
+                        </div>
+                        {% if pagination and pagination.total > 0 %}
+                        <div class="pagination-info mt-2">
+                            Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to 
+                            {{ pagination.page * pagination.per_page if pagination.page * pagination.per_page < pagination.total else pagination.total }} 
+                            of {{ pagination.total }} pages
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        {% if pages %}
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 50px;">
+                                                <input type="checkbox" class="form-check-input" id="selectAll">
+                                            </th>
+                                            <th>Path</th>
+                                            <th>Page Name</th>
+                                            <th>Staging URL</th>
+                                            <th>Production URL</th>
+                                            <th>Status</th>
+                                            <th>Last Crawled</th>
+                                            <th>Screenshot</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for page in pages %}
+                                            <tr>
+                                                <td>
+                                                    <input type="checkbox" class="form-check-input page-checkbox" 
+                                                           value="{{ page.id }}" name="selected_pages">
+                                                </td>
+                                                <td>
+                                                    <code>{{ page.path }}</code>
+                                                </td>
+                                                <td class="page-name-cell">
+                                                    {% if page.page_name %}
+                                                        <span title="{{ page.page_name }}">{{ page.page_name[:50] }}{% if page.page_name|length > 50 %}...{% endif %}</span>
+                                                    {% else %}
+                                                        <span class="text-muted fst-italic">No title</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="url-cell">
+                                                    <a href="{{ page.staging_url }}" target="_blank" class="text-break">
+                                                        {{ page.staging_url }}
+                                                        <i class="bi bi-box-arrow-up-right ms-1"></i>
+                                                    </a>
+                                                </td>
+                                                <td class="url-cell">
+                                                    <a href="{{ page.production_url }}" target="_blank" class="text-break">
+                                                        {{ page.production_url }}
+                                                        <i class="bi bi-box-arrow-up-right ms-1"></i>
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    {% if page.status == 'pending' %}
+                                                        <span class="badge bg-secondary status-badge">Pending</span>
+                                                    {% elif page.status == 'crawled' %}
+                                                        <span class="badge bg-success status-badge">Crawled</span>
+                                                    {% elif page.status == 'ready_for_diff' %}
+                                                        <span class="badge bg-primary status-badge">Ready for Diff</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    {% if page.last_crawled %}
+                                                        <small class="text-muted">{{ page.last_crawled.strftime('%m/%d %H:%M') }}</small>
+                                                    {% else %}
+                                                        <small class="text-muted">Never</small>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <span class="text-muted">
+                                                        <i class="bi bi-image me-1"></i>Phase 3
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Pagination -->
+                            {% if pagination and pagination.pages > 1 %}
+                            <nav aria-label="Page navigation">
+                                <ul class="pagination justify-content-center">
+                                    {% if pagination.has_prev %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="{{ url_for('project_details', project_id=project.id, page=pagination.prev_num, search=search_query, status=status_filter, per_page=per_page) }}">
+                                                <i class="bi bi-chevron-left"></i>
+                                            </a>
+                                        </li>
+                                    {% endif %}
+
+                                    {% for page_num in pagination.iter_pages() %}
+                                        {% if page_num %}
+                                            {% if page_num != pagination.page %}
+                                                <li class="page-item">
+                                                    <a class="page-link" href="{{ url_for('project_details', project_id=project.id, page=page_num, search=search_query, status=status_filter, per_page=per_page) }}">
+                                                        {{ page_num }}
+                                                    </a>
+                                                </li>
+                                            {% else %}
+                                                <li class="page-item active">
+                                                    <span class="page-link">{{ page_num }}</span>
+                                                </li>
+                                            {% endif %}
+                                        {% else %}
+                                            <li class="page-item disabled">
+                                                <span class="page-link">...</span>
+                                            </li>
+                                        {% endif %}
+                                    {% endfor %}
+
+                                    {% if pagination.has_next %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="{{ url_for('project_details', project_id=project.id, page=pagination.next_num, search=search_query, status=status_filter, per_page=per_page) }}">
+                                                <i class="bi bi-chevron-right"></i>
+                                            </a>
+                                        </li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                            {% endif %}
+
+                        {% else %}
+                            <div class="text-center py-5">
+                                {% if search_query or status_filter %}
+                                    <i class="bi bi-search display-1 text-muted mb-3"></i>
+                                    <h5>No Pages Found</h5>
+                                    <p class="text-muted mb-4">
+                                        No pages match your search criteria. Try adjusting your filters or search terms.
+                                    </p>
+                                    <a href="{{ url_for('project_details', project_id=project.id) }}" class="btn btn-outline-primary">
+                                        <i class="bi bi-x-circle me-1"></i>Clear Filters
+                                    </a>
+                                {% else %}
+                                    <i class="bi bi-search display-1 text-muted mb-3"></i>
+                                    <h5>No Pages Discovered Yet</h5>
+                                    <p class="text-muted mb-4">
+                                        Start crawling to discover pages that exist on both staging and production environments.
+                                    </p>
+                                    {% if job_status.status != 'scheduled' %}
+                                        <form method="POST" action="{{ url_for('start_crawl', project_id=project.id) }}" class="d-inline">
+                                            <button type="submit" class="btn btn-success">
+                                                <i class="bi bi-play-circle me-2"></i>Start Crawling Now
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Delete Project</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete the project <strong>"{{ project.name }}"</strong>?</p>
+                    <p class="text-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        This action cannot be undone. All discovered pages and data will be permanently deleted.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <form method="POST" action="{{ url_for('delete_project', project_id=project.id) }}" class="d-inline">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash me-1"></i>Delete Project
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Select all checkbox functionality
+        document.getElementById('selectAll').addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.page-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+        });
+
+        // Progress tracking and status updates
+        function updateProgress(progressData) {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressMessage = document.getElementById('progressMessage');
+            
+            if (progressData && progressData.stage !== 'unknown') {
+                progressContainer.style.display = 'block';
+                progressBar.style.width = progressData.progress + '%';
+                progressBar.setAttribute('aria-valuenow', progressData.progress);
+                progressMessage.textContent = progressData.message;
+                
+                // Update progress bar color based on stage
+                progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated';
+                if (progressData.stage === 'completed') {
+                    progressBar.classList.add('bg-success');
+                } else if (progressData.stage === 'error') {
+                    progressBar.classList.add('bg-danger');
+                } else {
+                    progressBar.classList.add('bg-primary');
+                }
+            } else {
+                progressContainer.style.display = 'none';
+            }
+        }
+
+        // Auto-refresh crawl status if crawling is in progress
+        function refreshStatus() {
+            fetch('{{ url_for("crawl_status", project_id=project.id) }}')
+                .then(response => response.json())
+                .then(data => {
+                    // Update progress if available
+                    if (data.progress) {
+                        updateProgress(data.progress);
+                    }
+                    
+                    // Update last updated time
+                    document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
+                    
+                    if (data.job_status.status !== 'scheduled') {
+                        // Crawl completed, reload page after a short delay
+                        setTimeout(() => {
+                            location.reload();
+                        }, 2000);
+                    }
+                })
+                .catch(error => console.error('Error checking status:', error));
+        }
+
+    </script>
+
+    {% if job_status.status == 'scheduled' %}
+    <script>
+        // Show progress container and start checking status
+        document.getElementById('progressContainer').style.display = 'block';
+        
+        // Check status every 3 seconds for more responsive updates
+        const statusInterval = setInterval(refreshStatus, 3000);
+        
+        // Initial status check
+        refreshStatus();
+    </script>
+    {% endif %}
+</body>
+</html>

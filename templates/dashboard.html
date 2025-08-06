@@ -72,32 +72,32 @@
         <div class="row">
             <!-- Add Project Card -->
             <div class="col-md-4 mb-4">
-                <div class="card dashboard-card h-100" onclick="showComingSoon('Add Project')">
+                <div class="card dashboard-card h-100" data-url="{{ url_for('add_project') }}">
                     <div class="card-body text-center">
                         <div class="feature-icon text-success">
                             <i class="bi bi-plus-circle-fill"></i>
                         </div>
                         <h5 class="card-title">Add Project</h5>
                         <p class="card-text">Create a new project to track UI differences between versions.</p>
-                        <button class="btn btn-success" disabled>
+                        <a href="{{ url_for('add_project') }}" class="btn btn-success">
                             <i class="bi bi-plus-lg me-2"></i>New Project
-                        </button>
+                        </a>
                     </div>
                 </div>
             </div>
 
             <!-- Project Details Card -->
             <div class="col-md-4 mb-4">
-                <div class="card dashboard-card h-100" onclick="showComingSoon('Project Details')">
+                <div class="card dashboard-card h-100" data-url="{{ url_for('projects_list') }}">
                     <div class="card-body text-center">
                         <div class="feature-icon text-primary">
                             <i class="bi bi-folder-fill"></i>
                         </div>
-                        <h5 class="card-title">Project Details</h5>
+                        <h5 class="card-title">My Projects</h5>
                         <p class="card-text">View and manage existing projects, configure settings and parameters.</p>
-                        <button class="btn btn-primary" disabled>
+                        <a href="{{ url_for('projects_list') }}" class="btn btn-primary">
                             <i class="bi bi-folder-open me-2"></i>View Projects
-                        </button>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -122,13 +122,16 @@
         <!-- Status Info -->
         <div class="row mt-5">
             <div class="col">
-                <div class="alert alert-info" role="alert">
+                <div class="alert alert-success" role="alert">
                     <h6 class="alert-heading">
-                        <i class="bi bi-info-circle-fill me-2"></i>Phase 1 - Foundation Complete
+                        <i class="bi bi-check-circle-fill me-2"></i>Phase 2 - Project Management & Crawling Complete
                     </h6>
                     <p class="mb-0">
-                        Authentication and basic dashboard are now functional. 
-                        Project management, crawling, and diff generation features will be added in future phases.
+                        ✅ User authentication and dashboard<br>
+                        ✅ Project creation and management<br>
+                        ✅ Web crawling with APScheduler<br>
+                        ✅ Page discovery and matching<br>
+                        🔄 Screenshot capture and diff generation (Phase 3)
                     </p>
                 </div>
             </div>
@@ -160,6 +163,23 @@
             document.getElementById('modalFeatureName').textContent = featureName + ' functionality is coming soon!';
             new bootstrap.Modal(document.getElementById('comingSoonModal')).show();
         }
+
+        // Handle card clicks for navigation
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.dashboard-card[data-url]');
+            cards.forEach(card => {
+                card.addEventListener('click', function(e) {
+                    // Don't navigate if clicking on a button or link
+                    if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') {
+                        return;
+                    }
+                    const url = this.getAttribute('data-url');
+                    if (url) {
+                        window.location.href = url;
+                    }
+                });
+            });
+        });
     </script>
 </body>
 </html>
