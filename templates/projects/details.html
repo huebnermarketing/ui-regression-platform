@@ -11,9 +11,32 @@
             max-width: 250px;
             word-break: break-all;
         }
-        .page-name-cell {
-            max-width: 200px;
+        .breadcrumb-cell {
+            max-width: 300px;
+            min-width: 200px;
+        }
+        .page-breadcrumb {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .page-title {
             font-weight: 500;
+            font-size: 14px;
+            line-height: 1.3;
+            color: #212529;
+        }
+        .page-path {
+            font-size: 12px;
+            line-height: 1.2;
+        }
+        .page-path code {
+            background-color: #f8f9fa;
+            color: #6c757d;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 11px;
+            border: 1px solid #e9ecef;
         }
         .status-badge {
             font-size: 0.8em;
@@ -272,8 +295,7 @@
                                             <th style="width: 50px;">
                                                 <input type="checkbox" class="form-check-input" id="selectAll">
                                             </th>
-                                            <th>Path</th>
-                                            <th>Page Name</th>
+                                            <th>Page</th>
                                             <th>Staging URL</th>
                                             <th>Production URL</th>
                                             <th>Status</th>
@@ -285,18 +307,22 @@
                                         {% for page in pages %}
                                             <tr>
                                                 <td>
-                                                    <input type="checkbox" class="form-check-input page-checkbox" 
+                                                    <input type="checkbox" class="form-check-input page-checkbox"
                                                            value="{{ page.id }}" name="selected_pages">
                                                 </td>
-                                                <td>
-                                                    <code>{{ page.path }}</code>
-                                                </td>
-                                                <td class="page-name-cell">
-                                                    {% if page.page_name %}
-                                                        <span title="{{ page.page_name }}">{{ page.page_name[:50] }}{% if page.page_name|length > 50 %}...{% endif %}</span>
-                                                    {% else %}
-                                                        <span class="text-muted fst-italic">No title</span>
-                                                    {% endif %}
+                                                <td class="breadcrumb-cell">
+                                                    <div class="page-breadcrumb">
+                                                        {% if page.page_name %}
+                                                            <div class="page-title" title="{{ page.page_name }}">
+                                                                {{ page.page_name[:60] }}{% if page.page_name|length > 60 %}...{% endif %}
+                                                            </div>
+                                                        {% else %}
+                                                            <div class="page-title text-muted fst-italic">No title</div>
+                                                        {% endif %}
+                                                        <div class="page-path">
+                                                            <code>{{ page.path }}</code>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                                 <td class="url-cell">
                                                     <a href="{{ page.staging_url }}" target="_blank" class="text-break">
