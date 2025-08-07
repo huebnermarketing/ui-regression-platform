@@ -71,7 +71,7 @@ class EnhancedWebCrawler:
         self.delay = delay
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'UI-Regression-Platform-Crawler/2.0'
+            'User-Agent': 'PixelPulse-Crawler/2.0'
         })
         
         # External domains to exclude (social media, analytics, etc.)
@@ -865,4 +865,4 @@ if __name__ == '__main__':
     print("Starting UI Diff Dashboard with MySQL...")
     print("Access the application at: http://localhost:5001")
     print("Demo credentials: username='demo', password='demo123'")
-    app.run(debug=True, port=5001)
+    app.run(debug=True, host='0.0.0.0', port=5001)

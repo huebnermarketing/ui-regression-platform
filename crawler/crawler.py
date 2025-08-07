@@ -18,7 +18,7 @@ class WebCrawler:
         self.delay = delay
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'UI-Regression-Platform-Crawler/1.0'
+            'User-Agent': 'PixelPulse-Crawler/1.0'
         })
         
         # Setup logging

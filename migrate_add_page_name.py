@@ -101,7 +101,7 @@ def migrate_database():
     return True
 
 if __name__ == "__main__":
-    print("UI Regression Platform - Database Migration")
+    print("PixelPulse - Database Migration")
     print("=" * 50)
     
     success = migrate_database()
