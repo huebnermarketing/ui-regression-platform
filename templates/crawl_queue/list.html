@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crawl Queue - UI Regression Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Modern Color Palette */
+        :root {
+            --primary-text: #0F172A;
+            --accent-color: #3b82f6;
+            --background: #FEFEFE;
+            --subtle-text: #8E9093;
+            --sidebar-bg: #0F172A;
+            --border-color: #BFCDD6;
+            --card-bg: #f5f7fa;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #3b82f6;
+            --card-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.1), 0 2px 4px -1px rgba(15, 23, 42, 0.06);
+            --card-shadow-hover: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -2px rgba(15, 23, 42, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--background);
+            color: var(--primary-text);
+            overflow-x: hidden;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid rgba(191, 205, 214, 0.2);
+            z-index: 1000;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(191, 205, 214, 0.2);
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: #FEFEFE;
+        }
+
+        .sidebar-logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-color);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.25rem;
+        }
+
+        .sidebar-logo-text {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #FEFEFE;
+        }
+
+        .sidebar-user {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid rgba(191, 205, 214, 0.2);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .user-details h6 {
+            margin: 0;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #FEFEFE;
+        }
+
+        .user-details p {
+            margin: 0;
+            font-size: 0.75rem;
+            color: #8E9093;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            margin: 0.25rem 1rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: #BFCDD6;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: rgba(59, 130, 246, 0.1);
+            color: #FEFEFE;
+        }
+
+        .nav-link.active {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .nav-link i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            min-height: 100vh;
+            background: var(--card-bg);
+        }
+
+        /* Top Bar */
+        .top-bar {
+            background: var(--background);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .page-header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+            color: var(--primary-text);
+        }
+
+        .page-header p {
+            margin: 0;
+            color: var(--subtle-text);
+            font-size: 0.875rem;
+        }
+
+        .btn-action {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-action:hover {
+            background: #2563eb;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--primary-text);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+            color: var(--primary-text);
+        }
+
+        /* Content Area */
+        .content-area {
+            padding: 2rem;
+        }
+
+        /* KPI Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            background: var(--background);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .kpi-card:hover {
+            box-shadow: var(--card-shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        .kpi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .kpi-info h3 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+            line-height: 1;
+            color: var(--primary-text);
+        }
+
+        .kpi-info p {
+            margin: 0.25rem 0 0;
+            font-size: 0.875rem;
+            color: var(--subtle-text);
+            font-weight: 500;
+        }
+
+        .kpi-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+        }
+
+        .kpi-icon.queued { background: var(--warning-color); }
+        .kpi-icon.running { background: var(--info-color); }
+        .kpi-icon.completed { background: var(--success-color); }
+        .kpi-icon.failed { background: var(--danger-color); }
+
+        /* Filter Section */
+        .filter-card {
+            background: var(--background);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .filter-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--primary-text);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-control, .form-select {
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            background: var(--background);
+            color: var(--primary-text);
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--primary-text);
+            margin-bottom: 0.5rem;
+        }
+
+        /* Section Cards */
+        .section-card {
+            background: var(--background);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+
+        .section-header {
+            padding: 1.5rem 1.5rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0 0 1rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--primary-text);
+        }
+
+        /* Active Tasks */
+        .active-task-card {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .active-task-card:hover {
+            background: #e8eef5;
+            border-color: var(--accent-color);
+            transform: translateY(-1px);
+        }
+
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .task-project {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--primary-text);
+        }
+
+        .task-time {
+            font-size: 0.875rem;
+            color: var(--subtle-text);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+
+        .status-badge.queued {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: var(--warning-color);
+        }
+
+        .status-badge.running {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: var(--info-color);
+        }
+
+        .status-badge.completed {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+        }
+
+        .status-badge.failed {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+        }
+
+        .status-badge.paused {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: var(--warning-color);
+        }
+
+        .progress-bar-container {
+            background-color: var(--border-color);
+            border-radius: 6px;
+            height: 8px;
+            overflow: hidden;
+            margin: 0.75rem 0;
+        }
+
+        .progress-bar {
+            background-color: var(--info-color);
+            height: 100%;
+            border-radius: 6px;
+            transition: width 0.3s ease;
+        }
+
+        .task-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.875rem;
+            color: var(--subtle-text);
+        }
+
+        /* Table */
+        .table-card {
+            background: var(--background);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .table-card-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--card-bg);
+        }
+
+        .table-card-body {
+            padding: 0;
+            overflow-x: auto;
+        }
+
+        .modern-table {
+            margin: 0;
+            border-collapse: separate;
+            border-spacing: 0;
+            min-width: 1200px;
+            width: 100%;
+        }
+
+        .modern-table thead th {
+            background-color: var(--card-bg);
+            border: none;
+            border-bottom: 2px solid var(--border-color);
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--primary-text);
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+
+        .modern-table tbody tr {
+            border-bottom: 1px solid #f1f5f9;
+            transition: all 0.2s ease;
+        }
+
+        .modern-table tbody tr:hover {
+            background-color: #e8eef5;
+        }
+
+        .modern-table tbody td {
+            padding: 1rem 1.5rem;
+            border: none;
+            vertical-align: middle;
+        }
+
+        .project-name {
+            font-weight: 600;
+            color: var(--primary-text);
+        }
+
+        .pages-badge {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: var(--info-color);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .duration-badge {
+            background-color: var(--card-bg);
+            color: var(--primary-text);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .error-message {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--danger-color);
+            font-size: 0.875rem;
+        }
+
+        /* Control Buttons */
+        .control-buttons {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .btn-control {
+            padding: 0.375rem 0.75rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .btn-control:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-control:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-start {
+            background: #ff6900;
+            color: white;
+        }
+
+        .btn-start:hover {
+            background: #e55a00;
+            color: white;
+        }
+
+        .btn-pause {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-pause:hover {
+            background: #4b5563;
+            color: white;
+        }
+
+        .btn-stop {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .btn-stop:hover {
+            background: #dc2626;
+            color: white;
+        }
+
+        /* Auto-refresh indicator */
+        .auto-refresh-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: var(--info-color);
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            box-shadow: var(--card-shadow);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            color: var(--subtle-text);
+            margin-bottom: 1rem;
+        }
+
+        .empty-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--primary-text);
+        }
+
+        .empty-description {
+            color: var(--subtle-text);
+            margin-bottom: 2rem;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .top-bar {
+                padding: 1rem;
+            }
+
+            .content-area {
+                padding: 1rem;
+            }
+
+            .kpi-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .modern-table thead th,
+            .modern-table tbody td {
+                padding: 0.75rem 1rem;
+            }
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            color: var(--primary-text);
+            padding: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-menu-btn {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <div class="sidebar" id="sidebar">
+        <!-- Sidebar Header -->
+        <div class="sidebar-header">
+            <a href="{{ url_for('dashboard') }}" class="sidebar-logo">
+                <div class="sidebar-logo-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="sidebar-logo-text">UI Regression</div>
+            </a>
+        </div>
+
+        <!-- User Profile -->
+        <div class="sidebar-user">
+            <div class="user-info">
+                <div class="user-avatar">
+                    {{ current_user.username[0].upper() }}
+                </div>
+                <div class="user-details">
+                    <h6>{{ current_user.username }}</h6>
+                    <p>Administrator</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Menu -->
+        <nav class="sidebar-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">
+                    <i class="fas fa-home"></i>
+                    <span>Dashboard</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('projects_list') }}" class="nav-link">
+                    <i class="fas fa-folder"></i>
+                    <span>Projects</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('crawl_queue') }}" class="nav-link active">
+                    <i class="fas fa-list-ul"></i>
+                    <span>Crawl Queue</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-images"></i>
+                    <span>Diff Results</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Analytics</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-bell"></i>
+                    <span>Alerts</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Reports</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-code"></i>
+                    <span>API Access</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h1>Crawl Queue Dashboard</h1>
+                <p>Monitor and manage your crawling tasks</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('dashboard') }}" class="btn-action btn-secondary">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content-area">
+            <!-- Auto-refresh indicator -->
+            {% if has_running_jobs %}
+            <div class="auto-refresh-indicator" id="autoRefreshIndicator">
+                <i class="fas fa-sync-alt fa-spin me-2"></i>Auto-refreshing every 5 seconds
+            </div>
+            {% endif %}
+
+            <!-- KPI Cards -->
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-info">
+                            <h3 id="kpi-queued">{{ kpis.queued }}</h3>
+                            <p>Queued</p>
+                        </div>
+                        <div class="kpi-icon queued">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-info">
+                            <h3 id="kpi-running">{{ kpis.running }}</h3>
+                            <p>In Progress</p>
+                        </div>
+                        <div class="kpi-icon running">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-info">
+                            <h3 id="kpi-paused">{{ kpis.paused }}</h3>
+                            <p>Paused</p>
+                        </div>
+                        <div class="kpi-icon queued">
+                            <i class="fas fa-pause-circle"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-info">
+                            <h3 id="kpi-completed">{{ kpis.completed }}</h3>
+                            <p>Completed</p>
+                        </div>
+                        <div class="kpi-icon completed">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-info">
+                            <h3 id="kpi-failed">{{ kpis.failed }}</h3>
+                            <p>Failed</p>
+                        </div>
+                        <div class="kpi-icon failed">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Section -->
+            <div class="filter-card">
+                <div class="filter-title">
+                    <i class="fas fa-filter"></i>Filter & Search
+                </div>
+                <form method="GET" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="status" class="form-label">Filter by Status</label>
+                        <select name="status" id="status" class="form-select">
+                            <option value="">All Statuses</option>
+                            <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Queued</option>
+                            <option value="running" {% if status_filter == 'running' %}selected{% endif %}>In Progress</option>
+                            <option value="paused" {% if status_filter == 'paused' %}selected{% endif %}>Paused</option>
+                            <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
+                            <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="search" class="form-label">Search Projects</label>
+                        <input type="text" name="search" id="search" class="form-control" 
+                               placeholder="Search by project name..." value="{{ search_query }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-grid">
+                            <button type="submit" class="btn-action">
+                                <i class="fas fa-search"></i>Filter
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Active Tasks Section -->
+            {% if active_jobs %}
+            <div class="section-card">
+                <div class="section-header">
+                    <h3 class="section-title">
+                        <i class="fas fa-play-circle"></i>Active Tasks
+                    </h3>
+                </div>
+                <div class="px-3 pb-3">
+                    <div class="row" id="activeTasksContainer">
+                        {% for job in active_jobs %}
+                        <div class="col-lg-6 mb-3">
+                            <div class="active-task-card">
+                                <div class="task-header">
+                                    <div>
+                                        <div class="task-project">{{ job.project.name }}</div>
+                                        <div class="task-time">
+                                            Started: {{ job.started_at.strftime('%H:%M:%S') if job.started_at else 'Unknown' }}
+                                        </div>
+                                    </div>
+                                    <span class="status-badge running">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        Running
+                                    </span>
+                                </div>
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar" style="width: 65%;"></div>
+                                </div>
+                                <div class="task-stats">
+                                    <span>{{ job.total_pages }} pages discovered</span>
+                                    <span>ETA: ~5 min</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- All Tasks Table -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h3 class="section-title">
+                        <i class="fas fa-list"></i>All Tasks ({{ all_jobs|length }} total)
+                    </h3>
+                </div>
+                <div class="table-card-body">
+                    {% if all_jobs %}
+                    <table class="table modern-table" id="allTasksTable">
+                        <thead>
+                            <tr>
+                                <th>Project Name</th>
+                                <th>Status</th>
+                                <th>Pages Discovered</th>
+                                <th>Started At</th>
+                                <th>Completed At</th>
+                                <th>Duration</th>
+                                <th>Error Message</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in all_jobs %}
+                            <tr data-job-id="{{ job.id }}">
+                                <td>
+                                    <div class="project-name">{{ job.project.name }}</div>
+                                </td>
+                                <td>
+                                    {% if job.status == 'pending' %}
+                                        <span class="status-badge queued">
+                                            <i class="fas fa-clock"></i>Queued
+                                        </span>
+                                    {% elif job.status == 'running' %}
+                                        <span class="status-badge running">
+                                            <i class="fas fa-spinner fa-spin"></i>Running
+                                        </span>
+                                    {% elif job.status == 'paused' %}
+                                        <span class="status-badge paused">
+                                            <i class="fas fa-pause-circle"></i>Paused
+                                        </span>
+                                    {% elif job.status == 'completed' %}
+                                        <span class="status-badge completed">
+                                            <i class="fas fa-check-circle"></i>Completed
+                                        </span>
+                                    {% elif job.status == 'failed' %}
+                                        <span class="status-badge failed">
+                                            <i class="fas fa-exclamation-triangle"></i>Failed
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="pages-badge">{{ job.total_pages }}</span>
+                                </td>
+                                <td>
+                                    {% if job.started_at %}
+                                        {{ job.started_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                                    {% else %}
+                                        <span style="color: var(--subtle-text);">Not started</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if job.completed_at %}
+                                        {{ job.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                                    {% else %}
+                                        <span style="color: var(--subtle-text);">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if job.duration_formatted %}
+                                        <span class="duration-badge">{{ job.duration_formatted }}</span>
+                                    {% else %}
+                                        <span style="color: var(--subtle-text);">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if job.error_message %}
+                                        <span class="error-message" title="{{ job.error_message }}">
+                                            {{ job.error_message }}
+                                        </span>
+                                    {% else %}
+                                        <span style="color: var(--subtle-text);">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="control-buttons">
+                                        {% if job.status == 'pending' %}
+                                            <button class="btn-control btn-start" onclick="startJob({{ job.id }})">
+                                                <i class="fas fa-play"></i>Start
+                                            </button>
+                                        {% elif job.status == 'running' %}
+                                            <button class="btn-control btn-pause" onclick="pauseJob({{ job.id }})">
+                                                <i class="fas fa-pause"></i>Pause
+                                            </button>
+                                            <button class="btn-control btn-stop" onclick="stopJob({{ job.id }})">
+                                                <i class="fas fa-stop"></i>Stop
+                                            </button>
+                                        {% elif job.status == 'paused' %}
+                                            <button class="btn-control btn-start" onclick="startJob({{ job.id }})">
+                                                <i class="fas fa-play"></i>Resume
+                                            </button>
+                                            <button class="btn-control btn-stop" onclick="stopJob({{ job.id }})">
+                                                <i class="fas fa-stop"></i>Stop
+                                            </button>
+                                        {% endif %}
+                                        <a href="{{ url_for('project_details', project_id=job.project_id) }}"
+                                           class="btn-action">
+                                            <i class="fas fa-eye"></i>View
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <i class="fas fa-tasks"></i>
+                        </div>
+                        <div class="empty-title">No crawl jobs found</div>
+                        <div class="empty-description">Start crawling a project to see jobs here.</div>
+                        <a href="{{ url_for('dashboard') }}" class="btn-action">
+                            <i class="fas fa-plus"></i>Go to Dashboard
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const menuBtn = document.querySelector('.mobile-menu-btn');
+            
+            if (window.innerWidth <= 768 && 
+                !sidebar.contains(event.target) && 
+                !menuBtn.contains(event.target) &&
+               sidebar.classList.contains('open')) {
+               sidebar.classList.remove('open');
+           }
+       });
+
+       // Control button functions
+       function startJob(jobId) {
+            if (confirm('Are you sure you want to start this crawl job?')) {
+                fetch(`/api/crawl-jobs/${jobId}/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Failed to start job: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error starting job:', error);
+                    alert('Failed to start job');
+                });
+            }
+        }
+
+        function pauseJob(jobId) {
+            if (confirm('Are you sure you want to pause this crawl job?')) {
+                fetch(`/api/crawl-jobs/${jobId}/pause`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Failed to pause job: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error pausing job:', error);
+                    alert('Failed to pause job');
+                });
+            }
+        }
+
+        function stopJob(jobId) {
+            if (confirm('Are you sure you want to stop this crawl job? This action cannot be undone.')) {
+                fetch(`/api/crawl-jobs/${jobId}/stop`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Failed to stop job: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error stopping job:', error);
+                    alert('Failed to stop job');
+                });
+            }
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const sidebar = document.getElementById('sidebar');
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('open');
+            }
+        });
+    </script>
+    
+    {% if has_running_jobs %}
+    <script>
+        // Auto-refresh functionality for running jobs
+        let autoRefreshInterval;
+        
+        function refreshData() {
+            const currentUrl = new URL(window.location);
+            const params = new URLSearchParams(currentUrl.search);
+            
+            fetch('/api/crawl-jobs?' + params.toString())
+                .then(response => response.json())
+                .then(data => {
+                    updateKPIs(data.kpis);
+                    updateActiveTasks(data.active_jobs);
+                    updateAllTasksTable(data.all_jobs);
+                    
+                    // Stop auto-refresh if no running jobs
+                    if (!data.has_running_jobs) {
+                        clearInterval(autoRefreshInterval);
+                        const indicator = document.getElementById('autoRefreshIndicator');
+                        if (indicator) {
+                            indicator.remove();
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error refreshing data:', error);
+                });
+        }
+        
+        function updateKPIs(kpis) {
+            document.getElementById('kpi-queued').textContent = kpis.queued;
+            document.getElementById('kpi-running').textContent = kpis.running;
+            document.getElementById('kpi-paused').textContent = kpis.paused;
+            document.getElementById('kpi-completed').textContent = kpis.completed;
+            document.getElementById('kpi-failed').textContent = kpis.failed;
+        }
+        
+        function updateActiveTasks(activeTasks) {
+            const container = document.getElementById('activeTasksContainer');
+            if (!container) return;
+            
+            if (activeTasks.length === 0) {
+                const section = container.closest('.section-card');
+                if (section) section.style.display = 'none';
+                return;
+            }
+            
+            container.innerHTML = '';
+            activeTasks.forEach(task => {
+                const taskCard = createActiveTaskCard(task);
+                container.appendChild(taskCard);
+            });
+        }
+        
+        function createActiveTaskCard(task) {
+            const col = document.createElement('div');
+            col.className = 'col-lg-6 mb-3';
+            
+            col.innerHTML = `
+                <div class="active-task-card">
+                    <div class="task-header">
+                        <div>
+                            <div class="task-project">${task.project_name}</div>
+                            <div class="task-time">Started: ${task.started_at ? new Date(task.started_at).toLocaleTimeString() : 'Unknown'}</div>
+                        </div>
+                        <span class="status-badge running">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Running
+                        </span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: 65%;"></div>
+                    </div>
+                    <div class="task-stats">
+                        <span>${task.total_pages} pages discovered</span>
+                        <span>ETA: ~5 min</span>
+                    </div>
+                </div>
+            `;
+            
+            return col;
+        }
+        
+        function updateAllTasksTable(jobs) {
+            const tbody = document.querySelector('#allTasksTable tbody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            
+            jobs.forEach(job => {
+                const row = createJobRow(job);
+                tbody.appendChild(row);
+            });
+        }
+        
+        function createJobRow(job) {
+            const row = document.createElement('tr');
+            row.setAttribute('data-job-id', job.id);
+            
+            let statusBadge = '';
+            if (job.status === 'pending') {
+                statusBadge = '<span class="status-badge queued"><i class="fas fa-clock"></i>Queued</span>';
+            } else if (job.status === 'running') {
+                statusBadge = '<span class="status-badge running"><i class="fas fa-spinner fa-spin"></i>Running</span>';
+            } else if (job.status === 'paused') {
+                statusBadge = '<span class="status-badge paused"><i class="fas fa-pause-circle"></i>Paused</span>';
+            } else if (job.status === 'completed') {
+                statusBadge = '<span class="status-badge completed"><i class="fas fa-check-circle"></i>Completed</span>';
+            } else if (job.status === 'failed') {
+                statusBadge = '<span class="status-badge failed"><i class="fas fa-exclamation-triangle"></i>Failed</span>';
+            }
+            
+            const errorMessage = job.error_message ?
+                `<span class="error-message" title="${job.error_message}">${job.error_message}</span>` :
+                '<span style="color: var(--subtle-text);">-</span>';
+            
+            const durationFormatted = job.duration_formatted ?
+                `<span class="duration-badge">${job.duration_formatted}</span>` :
+                '<span style="color: var(--subtle-text);">-</span>';
+            
+            // Generate action buttons based on status
+            let actionButtons = '';
+            if (job.status === 'pending') {
+                actionButtons = `
+                    <button class="btn-control btn-start" onclick="startJob(${job.id})">
+                        <i class="fas fa-play"></i>Start
+                    </button>
+                `;
+            } else if (job.status === 'running') {
+                actionButtons = `
+                    <button class="btn-control btn-pause" onclick="pauseJob(${job.id})">
+                        <i class="fas fa-pause"></i>Pause
+                    </button>
+                    <button class="btn-control btn-stop" onclick="stopJob(${job.id})">
+                        <i class="fas fa-stop"></i>Stop
+                    </button>
+                `;
+            } else if (job.status === 'paused') {
+                actionButtons = `
+                    <button class="btn-control btn-start" onclick="startJob(${job.id})">
+                        <i class="fas fa-play"></i>Resume
+                    </button>
+                    <button class="btn-control btn-stop" onclick="stopJob(${job.id})">
+                        <i class="fas fa-stop"></i>Stop
+                    </button>
+                `;
+            }
+            
+            actionButtons += `<a href="/projects/${job.project_id}" class="btn-action"><i class="fas fa-eye"></i>View</a>`;
+
+            row.innerHTML = `
+                <td><div class="project-name">${job.project_name}</div></td>
+                <td>${statusBadge}</td>
+                <td><span class="pages-badge">${job.total_pages}</span></td>
+                <td>${job.started_at || '<span style="color: var(--subtle-text);">Not started</span>'}</td>
+                <td>${job.completed_at || '<span style="color: var(--subtle-text);">-</span>'}</td>
+                <td>${durationFormatted}</td>
+                <td>${errorMessage}</td>
+                <td><div class="control-buttons">${actionButtons}</div></td>
+            `;
+            
+            return row;
+        }
+        
+        // Start auto-refresh
+        autoRefreshInterval = setInterval(refreshData, 5000);
+    </script>
+    {% endif %}
+</body>
+</html>

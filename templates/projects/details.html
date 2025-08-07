@@ -3,437 +3,998 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ project.name }} - UI Diff Dashboard</title>
+    <title>{{ project.name }} - UI Regression Platform</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        /* Modern Color Palette */
+        :root {
+            --primary-text: #0F172A;
+            --accent-color: #3b82f6;
+            --background: #FEFEFE;
+            --subtle-text: #8E9093;
+            --sidebar-bg: #0F172A;
+            --border-color: #BFCDD6;
+            --card-bg: #f5f7fa;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #3b82f6;
+            --card-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.1), 0 2px 4px -1px rgba(15, 23, 42, 0.06);
+            --card-shadow-hover: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -2px rgba(15, 23, 42, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--background);
+            color: var(--primary-text);
+            overflow-x: hidden;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid rgba(191, 205, 214, 0.2);
+            z-index: 1000;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(191, 205, 214, 0.2);
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: #FEFEFE;
+        }
+
+        .sidebar-logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-color);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.25rem;
+        }
+
+        .sidebar-logo-text {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #FEFEFE;
+        }
+
+        .sidebar-user {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid rgba(191, 205, 214, 0.2);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .user-details h6 {
+            margin: 0;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #FEFEFE;
+        }
+
+        .user-details p {
+            margin: 0;
+            font-size: 0.75rem;
+            color: #8E9093;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            margin: 0.25rem 1rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: #BFCDD6;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: rgba(59, 130, 246, 0.1);
+            color: #FEFEFE;
+        }
+
+        .nav-link.active {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .nav-link i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            min-height: 100vh;
+            background: var(--card-bg);
+        }
+
+        /* Top Bar */
+        .top-bar {
+            background: var(--background);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .page-header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+            color: var(--primary-text);
+        }
+
+        .page-header p {
+            margin: 0;
+            color: var(--subtle-text);
+            font-size: 0.875rem;
+        }
+
+        .page-meta {
+            font-size: 0.75rem;
+            color: var(--subtle-text);
+            margin-top: 0.25rem;
+        }
+
+        .btn-action {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-action:hover {
+            background: #2563eb;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--primary-text);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+            color: var(--primary-text);
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+            color: white;
+            border: none;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            color: white;
+        }
+
+        /* Content Area */
+        .content-area {
+            padding: 2rem;
+        }
+
+        /* Cards */
+        .info-card {
+            background: var(--background);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
+        }
+
+        .info-card-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--card-bg);
+            border-radius: 12px 12px 0 0;
+        }
+
+        .info-card-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin: 0;
+            color: var(--primary-text);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .info-card-body {
+            padding: 1rem 1.5rem;
+        }
+
+        .url-link {
+            color: var(--accent-color);
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        .url-link:hover {
+            color: #2563eb;
+            text-decoration: underline;
+        }
+
+        /* Crawl Status Card */
+        .crawl-status-card {
+            background: var(--background);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--accent-color);
+            margin-bottom: 2rem;
+        }
+
+        .crawl-status-body {
+            padding: 1.5rem;
+        }
+
+        .status-badge {
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+
+        .status-badge.warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning-color);
+        }
+
+        .status-badge.success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+        }
+
+        .status-badge.secondary {
+            background: rgba(142, 144, 147, 0.1);
+            color: var(--subtle-text);
+        }
+
+        .progress-container {
+            margin-top: 1rem;
+        }
+
+        .progress {
+            height: 8px;
+            border-radius: 4px;
+            background: var(--card-bg);
+        }
+
+        .progress-bar {
+            border-radius: 4px;
+        }
+
+        /* Filter Section */
+        .filter-card {
+            background: var(--background);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-control, .form-select {
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            background: var(--background);
+            color: var(--primary-text);
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--primary-text);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Table */
+        .table-card {
+            background: var(--background);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .table-card-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--card-bg);
+        }
+
+        .table-card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+            color: var(--primary-text);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .table-card-body {
+            padding: 0;
+        }
+
+        .modern-table {
+            margin: 0;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .modern-table thead th {
+            background-color: var(--card-bg);
+            border: none;
+            border-bottom: 2px solid var(--border-color);
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--primary-text);
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+
+        .modern-table tbody tr {
+            border-bottom: 1px solid #f1f5f9;
+            transition: all 0.2s ease;
+        }
+
+        .modern-table tbody tr:hover {
+            background-color: var(--card-bg);
+        }
+
+        .modern-table tbody td {
+            padding: 1rem 1.5rem;
+            border: none;
+            vertical-align: middle;
+        }
+
+        .page-breadcrumb {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .page-title {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--primary-text);
+        }
+
+        .page-path {
+            font-size: 0.75rem;
+        }
+
+        .page-path code {
+            background: var(--card-bg);
+            color: var(--subtle-text);
+            padding: 0.125rem 0.25rem;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            border: 1px solid var(--border-color);
+        }
+
         .url-cell {
             max-width: 250px;
             word-break: break-all;
         }
+
         .breadcrumb-cell {
             max-width: 300px;
             min-width: 200px;
         }
-        .page-breadcrumb {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .page-title {
-            font-weight: 500;
-            font-size: 14px;
-            line-height: 1.3;
-            color: #212529;
-        }
-        .page-path {
-            font-size: 12px;
-            line-height: 1.2;
-        }
-        .page-path code {
-            background-color: #f8f9fa;
-            color: #6c757d;
-            padding: 2px 4px;
-            border-radius: 3px;
-            font-size: 11px;
-            border: 1px solid #e9ecef;
-        }
-        .status-badge {
-            font-size: 0.8em;
-        }
-        .crawl-status {
-            border-left: 4px solid #007bff;
-            background-color: #f8f9fa;
-        }
-        .progress-container {
-            margin-top: 10px;
-        }
-        .search-filters {
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
+
         .pagination-info {
-            color: #6c757d;
-            font-size: 0.9em;
+            color: var(--subtle-text);
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            color: var(--subtle-text);
+            margin-bottom: 1rem;
+        }
+
+        .empty-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--primary-text);
+        }
+
+        .empty-description {
+            color: var(--subtle-text);
+            margin-bottom: 2rem;
+        }
+
+        /* Modal */
+        .modal-content {
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .modal-header {
+            border-bottom: 1px solid var(--border-color);
+            background: var(--card-bg);
+        }
+
+        .modal-title {
+            color: var(--primary-text);
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .top-bar {
+                padding: 1rem;
+            }
+
+            .content-area {
+                padding: 1rem;
+            }
+
+            .modern-table thead th,
+            .modern-table tbody td {
+                padding: 0.75rem 1rem;
+            }
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            color: var(--primary-text);
+            padding: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-menu-btn {
+                display: block;
+            }
         }
     </style>
 </head>
-<body class="bg-light">
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
-                <i class="bi bi-eye-fill me-2"></i>
-                UI Diff Dashboard
+<body>
+    <!-- Sidebar Navigation -->
+    <div class="sidebar" id="sidebar">
+        <!-- Sidebar Header -->
+        <div class="sidebar-header">
+            <a href="{{ url_for('dashboard') }}" class="sidebar-logo">
+                <div class="sidebar-logo-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="sidebar-logo-text">UI Regression</div>
             </a>
-            <div class="navbar-nav ms-auto">
-                <span class="navbar-text me-3">
-                    Welcome, {{ current_user.username }}!
-                </span>
-                <a class="nav-link" href="{{ url_for('logout') }}">
-                    <i class="bi bi-box-arrow-right"></i> Logout
+        </div>
+
+        <!-- User Profile -->
+        <div class="sidebar-user">
+            <div class="user-info">
+                <div class="user-avatar">
+                    {{ current_user.username[0].upper() }}
+                </div>
+                <div class="user-details">
+                    <h6>{{ current_user.username }}</h6>
+                    <p>Administrator</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Menu -->
+        <nav class="sidebar-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">
+                    <i class="fas fa-home"></i>
+                    <span>Dashboard</span>
                 </a>
             </div>
-        </div>
-    </nav>
+            <div class="nav-item">
+                <a href="{{ url_for('projects_list') }}" class="nav-link active">
+                    <i class="fas fa-folder"></i>
+                    <span>Projects</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('crawl_queue') }}" class="nav-link">
+                    <i class="fas fa-list-ul"></i>
+                    <span>Crawl Queue</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-images"></i>
+                    <span>Diff Results</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Analytics</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-bell"></i>
+                    <span>Alerts</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Reports</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-code"></i>
+                    <span>API Access</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </div>
+        </nav>
+    </div>
 
     <!-- Main Content -->
-    <div class="container mt-4">
-        <!-- Flash messages -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' if category == 'success' else 'info' }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+    <div class="main-content">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h1>{{ project.name }}</h1>
+                <p>Project Details & Page Management</p>
+                <div class="page-meta">
+                    <i class="fas fa-calendar"></i>
+                    Created {{ project.created_at.strftime('%Y-%m-%d %H:%M') }}
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('projects_list') }}" class="btn-action btn-secondary">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Projects
+                </a>
+                <button type="button" class="btn-action btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                    <i class="fas fa-trash"></i>
+                    Delete
+                </button>
+            </div>
+        </div>
 
-        <!-- Project Header -->
-        <div class="row mb-4">
-            <div class="col">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <h1 class="display-6">{{ project.name }}</h1>
-                        <p class="lead text-muted">Project Details & Page Management</p>
-                        <small class="text-muted">
-                            <i class="bi bi-calendar3 me-1"></i>
-                            Created: {{ project.created_at.strftime('%Y-%m-%d %H:%M') }}
-                        </small>
+        <!-- Content Area -->
+        <div class="content-area">
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else 'success' if category == 'success' else 'info' }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Project Info Cards -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="info-card">
+                        <div class="info-card-header">
+                            <h6 class="info-card-title">
+                                <i class="fas fa-globe"></i>
+                                Staging Environment
+                            </h6>
+                        </div>
+                        <div class="info-card-body">
+                            <a href="{{ project.staging_url }}" target="_blank" class="url-link">
+                                {{ project.staging_url }}
+                                <i class="fas fa-external-link-alt ms-1"></i>
+                            </a>
+                        </div>
                     </div>
-                    <div class="text-end">
-                        <a href="{{ url_for('projects_list') }}" class="btn btn-outline-secondary me-2">
-                            <i class="bi bi-arrow-left me-1"></i>Back to Projects
-                        </a>
-                        <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
-                                <i class="bi bi-trash me-1"></i>Delete
-                            </button>
+                </div>
+                <div class="col-md-6">
+                    <div class="info-card">
+                        <div class="info-card-header">
+                            <h6 class="info-card-title">
+                                <i class="fas fa-globe"></i>
+                                Production Environment
+                            </h6>
+                        </div>
+                        <div class="info-card-body">
+                            <a href="{{ project.production_url }}" target="_blank" class="url-link">
+                                {{ project.production_url }}
+                                <i class="fas fa-external-link-alt ms-1"></i>
+                            </a>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Project Info -->
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="card-title mb-0">
-                            <i class="bi bi-globe me-2"></i>Staging Environment
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <a href="{{ project.staging_url }}" target="_blank" class="text-break">
-                            {{ project.staging_url }}
-                            <i class="bi bi-box-arrow-up-right ms-1"></i>
-                        </a>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="card-title mb-0">
-                            <i class="bi bi-globe2 me-2"></i>Production Environment
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <a href="{{ project.production_url }}" target="_blank" class="text-break">
-                            {{ project.production_url }}
-                            <i class="bi bi-box-arrow-up-right ms-1"></i>
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Crawl Status & Actions -->
-        <div class="row mb-4">
-            <div class="col">
-                <div class="card crawl-status">
-                    <div class="card-body">
-                        <div class="row align-items-center">
-                            <div class="col-md-8">
-                                <h6 class="mb-1">
-                                    <i class="bi bi-robot me-2"></i>Crawl Status
-                                </h6>
-                                <div id="crawlStatus">
-                                    {% if job_status.status == 'scheduled' %}
-                                        <span class="badge bg-warning">
-                                            <i class="bi bi-clock me-1"></i>Crawling in progress...
-                                        </span>
-                                    {% elif pages %}
-                                        <span class="badge bg-success">
-                                            <i class="bi bi-check-circle me-1"></i>{{ pagination.total if pagination else pages|length }} pages discovered
-                                        </span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">
-                                            <i class="bi bi-dash-circle me-1"></i>No crawl performed yet
-                                        </span>
-                                    {% endif %}
-                                </div>
-                                <small class="text-muted">
-                                    Last updated: <span id="lastUpdated">Just now</span>
-                                </small>
-                                <!-- Progress Bar -->
-                                <div id="progressContainer" class="progress-container" style="display: none;">
-                                    <div class="progress mb-2">
-                                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                                             role="progressbar" style="width: 0%"></div>
-                                    </div>
-                                    <small id="progressMessage" class="text-muted">Initializing...</small>
-                                </div>
-                            </div>
-                            <div class="col-md-4 text-end">
+            <!-- Crawl Status & Actions -->
+            <div class="crawl-status-card">
+                <div class="crawl-status-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h6 class="mb-2">
+                                <i class="fas fa-robot me-2"></i>Crawl Status
+                            </h6>
+                            <div id="crawlStatus">
                                 {% if job_status.status == 'scheduled' %}
-                                    <form method="POST" action="{{ url_for('cancel_crawl', project_id=project.id) }}" class="d-inline">
-                                        <button type="submit" class="btn btn-outline-warning">
-                                            <i class="bi bi-stop-circle me-1"></i>Cancel Crawl
-                                        </button>
-                                    </form>
+                                    <span class="status-badge warning">
+                                        <i class="fas fa-clock me-1"></i>Crawling in progress...
+                                    </span>
+                                {% elif pages %}
+                                    <span class="status-badge success">
+                                        <i class="fas fa-check-circle me-1"></i>{{ pagination.total if pagination else pages|length }} pages discovered
+                                    </span>
                                 {% else %}
-                                    <form method="POST" action="{{ url_for('start_crawl', project_id=project.id) }}" class="d-inline">
-                                        <button type="submit" class="btn btn-success">
-                                            <i class="bi bi-play-circle me-1"></i>Start Crawling
-                                        </button>
-                                    </form>
+                                    <span class="status-badge secondary">
+                                        <i class="fas fa-minus-circle me-1"></i>No crawl performed yet
+                                    </span>
                                 {% endif %}
                             </div>
+                            <small style="color: var(--subtle-text);">
+                                Last updated: <span id="lastUpdated">Just now</span>
+                            </small>
+                            <!-- Progress Bar -->
+                            <div id="progressContainer" class="progress-container" style="display: none;">
+                                <div class="progress mb-2">
+                                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <small id="progressMessage" style="color: var(--subtle-text);">Initializing...</small>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Search and Filter Section -->
-        {% if pages or search_query or status_filter %}
-        <div class="search-filters">
-            <form method="GET" action="{{ url_for('project_details', project_id=project.id) }}">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-4">
-                        <label for="search" class="form-label">
-                            <i class="bi bi-search me-1"></i>Search Pages
-                        </label>
-                        <input type="text" class="form-control" id="search" name="search" 
-                               value="{{ search_query }}" placeholder="Search by path, title, or URL...">
-                    </div>
-                    <div class="col-md-3">
-                        <label for="status" class="form-label">
-                            <i class="bi bi-funnel me-1"></i>Filter by Status
-                        </label>
-                        <select class="form-select" id="status" name="status">
-                            <option value="">All Statuses</option>
-                            {% for status in available_statuses %}
-                                <option value="{{ status }}" {{ 'selected' if status == status_filter else '' }}>
-                                    {{ status.title() }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label for="per_page" class="form-label">Per Page</label>
-                        <select class="form-select" id="per_page" name="per_page">
-                            <option value="10" {{ 'selected' if per_page == 10 else '' }}>10</option>
-                            <option value="20" {{ 'selected' if per_page == 20 else '' }}>20</option>
-                            <option value="50" {{ 'selected' if per_page == 50 else '' }}>50</option>
-                            <option value="100" {{ 'selected' if per_page == 100 else '' }}>100</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <button type="submit" class="btn btn-primary me-2">
-                            <i class="bi bi-search me-1"></i>Apply Filters
-                        </button>
-                        <a href="{{ url_for('project_details', project_id=project.id) }}" class="btn btn-outline-secondary">
-                            <i class="bi bi-x-circle me-1"></i>Clear
-                        </a>
-                    </div>
-                </div>
-            </form>
-        </div>
-        {% endif %}
-
-        <!-- Pages Table -->
-        <div class="row">
-            <div class="col">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h5 class="card-title mb-0">
-                                <i class="bi bi-list-ul me-2"></i>Discovered Pages
-                                {% if pagination %}
-                                    <span class="badge bg-primary ms-2">{{ pagination.total }}</span>
-                                {% elif pages %}
-                                    <span class="badge bg-primary ms-2">{{ pages|length }}</span>
-                                {% endif %}
-                            </h5>
-                            {% if pages %}
-                                <button class="btn btn-outline-primary btn-sm" disabled>
-                                    <i class="bi bi-eye-fill me-1"></i>Proceed to Diff (Phase 3)
-                                </button>
+                        <div class="col-md-4 text-end">
+                            {% if job_status.status == 'scheduled' %}
+                                <form method="POST" action="{{ url_for('cancel_crawl', project_id=project.id) }}" class="d-inline">
+                                    <button type="submit" class="btn-action" style="background: var(--warning-color);">
+                                        <i class="fas fa-stop-circle"></i>Cancel Crawl
+                                    </button>
+                                </form>
+                            {% else %}
+                                <form method="POST" action="{{ url_for('start_crawl', project_id=project.id) }}" class="d-inline">
+                                    <button type="submit" class="btn-action" style="background: var(--success-color);">
+                                        <i class="fas fa-play-circle"></i>Start Crawling
+                                    </button>
+                                </form>
                             {% endif %}
                         </div>
-                        {% if pagination and pagination.total > 0 %}
-                        <div class="pagination-info mt-2">
-                            Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to 
-                            {{ pagination.page * pagination.per_page if pagination.page * pagination.per_page < pagination.total else pagination.total }} 
-                            of {{ pagination.total }} pages
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search and Filter Section -->
+            {% if pages or search_query or status_filter %}
+            <div class="filter-card">
+                <form method="GET" action="{{ url_for('project_details', project_id=project.id) }}">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label for="search" class="form-label">
+                                <i class="fas fa-search"></i>Search Pages
+                            </label>
+                            <input type="text" class="form-control" id="search" name="search" 
+                                   value="{{ search_query }}" placeholder="Search by path, title, or URL...">
                         </div>
+                        <div class="col-md-3">
+                            <label for="status" class="form-label">
+                                <i class="fas fa-filter"></i>Filter by Status
+                            </label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="">All Statuses</option>
+                                {% for status in available_statuses %}
+                                    <option value="{{ status }}" {{ 'selected' if status == status_filter else '' }}>
+                                        {{ status.title() }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="per_page" class="form-label">Per Page</label>
+                            <select class="form-select" id="per_page" name="per_page">
+                                <option value="10" {{ 'selected' if per_page == 10 else '' }}>10</option>
+                                <option value="20" {{ 'selected' if per_page == 20 else '' }}>20</option>
+                                <option value="50" {{ 'selected' if per_page == 50 else '' }}>50</option>
+                                <option value="100" {{ 'selected' if per_page == 100 else '' }}>100</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn-action me-2">
+                                <i class="fas fa-search"></i>Apply Filters
+                            </button>
+                            <a href="{{ url_for('project_details', project_id=project.id) }}" class="btn-action btn-secondary">
+                                <i class="fas fa-times-circle"></i>Clear
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+
+            <!-- Pages Table -->
+            <div class="table-card">
+                <div class="table-card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="table-card-title">
+                            <i class="fas fa-list-ul"></i>Discovered Pages
+                            {% if pagination %}
+                                <span class="status-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-color);">{{ pagination.total }}</span>
+                            {% elif pages %}
+                                <span class="status-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-color);">{{ pages|length }}</span>
+                            {% endif %}
+                        </h5>
+                        {% if pages %}
+                            <button class="btn-action btn-secondary" disabled>
+                                <i class="fas fa-eye"></i>Proceed to Diff (Phase 3)
+                            </button>
                         {% endif %}
                     </div>
-                    <div class="card-body">
-                        {% if pages %}
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead class="table-light">
+                    {% if pagination and pagination.total > 0 %}
+                    <div class="pagination-info">
+                        Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to 
+                        {{ pagination.page * pagination.per_page if pagination.page * pagination.per_page < pagination.total else pagination.total }} 
+                        of {{ pagination.total }} pages
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="table-card-body">
+                    {% if pages %}
+                        <div class="table-responsive">
+                            <table class="table modern-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px;">
+                                            <input type="checkbox" class="form-check-input" id="selectAll">
+                                        </th>
+                                        <th>Page</th>
+                                        <th>Staging URL</th>
+                                        <th>Production URL</th>
+                                        <th>Status</th>
+                                        <th>Last Crawled</th>
+                                        <th>Screenshot</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for page in pages %}
                                         <tr>
-                                            <th style="width: 50px;">
-                                                <input type="checkbox" class="form-check-input" id="selectAll">
-                                            </th>
-                                            <th>Page</th>
-                                            <th>Staging URL</th>
-                                            <th>Production URL</th>
-                                            <th>Status</th>
-                                            <th>Last Crawled</th>
-                                            <th>Screenshot</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for page in pages %}
-                                            <tr>
-                                                <td>
-                                                    <input type="checkbox" class="form-check-input page-checkbox"
-                                                           value="{{ page.id }}" name="selected_pages">
-                                                </td>
-                                                <td class="breadcrumb-cell">
-                                                    <div class="page-breadcrumb">
-                                                        {% if page.page_name %}
-                                                            <div class="page-title" title="{{ page.page_name }}">
-                                                                {{ page.page_name[:60] }}{% if page.page_name|length > 60 %}...{% endif %}
-                                                            </div>
-                                                        {% else %}
-                                                            <div class="page-title text-muted fst-italic">No title</div>
-                                                        {% endif %}
-                                                        <div class="page-path">
-                                                            <code>{{ page.path }}</code>
+                                            <td>
+                                                <input type="checkbox" class="form-check-input page-checkbox"
+                                                       value="{{ page.id }}" name="selected_pages">
+                                            </td>
+                                            <td class="breadcrumb-cell">
+                                                <div class="page-breadcrumb">
+                                                    {% if page.page_name %}
+                                                        <div class="page-title" title="{{ page.page_name }}">
+                                                            {{ page.page_name[:60] }}{% if page.page_name|length > 60 %}...{% endif %}
                                                         </div>
-                                                    </div>
-                                                </td>
-                                                <td class="url-cell">
-                                                    <a href="{{ page.staging_url }}" target="_blank" class="text-break">
-                                                        {{ page.staging_url }}
-                                                        <i class="bi bi-box-arrow-up-right ms-1"></i>
-                                                    </a>
-                                                </td>
-                                                <td class="url-cell">
-                                                    <a href="{{ page.production_url }}" target="_blank" class="text-break">
-                                                        {{ page.production_url }}
-                                                        <i class="bi bi-box-arrow-up-right ms-1"></i>
-                                                    </a>
-                                                </td>
-                                                <td>
-                                                    {% if page.status == 'pending' %}
-                                                        <span class="badge bg-secondary status-badge">Pending</span>
-                                                    {% elif page.status == 'crawled' %}
-                                                        <span class="badge bg-success status-badge">Crawled</span>
-                                                    {% elif page.status == 'ready_for_diff' %}
-                                                        <span class="badge bg-primary status-badge">Ready for Diff</span>
-                                                    {% endif %}
-                                                </td>
-                                                <td>
-                                                    {% if page.last_crawled %}
-                                                        <small class="text-muted">{{ page.last_crawled.strftime('%m/%d %H:%M') }}</small>
                                                     {% else %}
-                                                        <small class="text-muted">Never</small>
+                                                        <div class="page-title" style="color: var(--subtle-text); font-style: italic;">No title</div>
                                                     {% endif %}
-                                                </td>
-                                                <td>
-                                                    <span class="text-muted">
-                                                        <i class="bi bi-image me-1"></i>Phase 3
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
+                                                    <div class="page-path">
+                                                        <code>{{ page.path }}</code>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="url-cell">
+                                                <a href="{{ page.staging_url }}" target="_blank" class="url-link">
+                                                    {{ page.staging_url }}
+                                                    <i class="fas fa-external-link-alt ms-1"></i>
+                                                </a>
+                                            </td>
+                                            <td class="url-cell">
+                                                <a href="{{ page.production_url }}" target="_blank" class="url-link">
+                                                    {{ page.production_url }}
+                                                    <i class="fas fa-external-link-alt ms-1"></i>
+                                                </a>
+                                            </td>
+                                            <td>
+                                                {% if page.status == 'pending' %}
+                                                    <span class="status-badge secondary">Pending</span>
+                                                {% elif page.status == 'crawled' %}
+                                                    <span class="status-badge success">Crawled</span>
+                                                {% elif page.status == 'ready_for_diff' %}
+                                                    <span class="status-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-color);">Ready for Diff</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if page.last_crawled %}
+                                                    <small style="color: var(--subtle-text);">{{ page.last_crawled.strftime('%m/%d %H:%M') }}</small>
+                                                {% else %}
+                                                    <small style="color: var(--subtle-text);">Never</small>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <span style="color: var(--subtle-text);">
+                                                    <i class="fas fa-image me-1"></i>Phase 3
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
 
-                            <!-- Pagination -->
-                            {% if pagination and pagination.pages > 1 %}
-                            <nav aria-label="Page navigation">
-                                <ul class="pagination justify-content-center">
-                                    {% if pagination.has_prev %}
-                                        <li class="page-item">
-                                            <a class="page-link" href="{{ url_for('project_details', project_id=project.id, page=pagination.prev_num, search=search_query, status=status_filter, per_page=per_page) }}">
-                                                <i class="bi bi-chevron-left"></i>
-                                            </a>
-                                        </li>
-                                    {% endif %}
+                        <!-- Pagination -->
+                        {% if pagination and pagination.pages > 1 %}
+                        <nav aria-label="Page navigation" class="p-3">
+                            <ul class="pagination justify-content-center">
+                                {% if pagination.has_prev %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('project_details', project_id=project.id, page=pagination.prev_num, search=search_query, status=status_filter, per_page=per_page) }}">
+                                            <i class="fas fa-chevron-left"></i>
+                                        </a>
+                                    </li>
+                                {% endif %}
 
-                                    {% for page_num in pagination.iter_pages() %}
-                                        {% if page_num %}
-                                            {% if page_num != pagination.page %}
-                                                <li class="page-item">
-                                                    <a class="page-link" href="{{ url_for('project_details', project_id=project.id, page=page_num, search=search_query, status=status_filter, per_page=per_page) }}">
-                                                        {{ page_num }}
-                                                    </a>
-                                                </li>
-                                            {% else %}
-                                                <li class="page-item active">
-                                                    <span class="page-link">{{ page_num }}</span>
-                                                </li>
-                                            {% endif %}
+                                {% for page_num in pagination.iter_pages() %}
+                                    {% if page_num %}
+                                        {% if page_num != pagination.page %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="{{ url_for('project_details', project_id=project.id, page=page_num, search=search_query, status=status_filter, per_page=per_page) }}">
+                                                    {{ page_num }}
+                                                </a>
+                                            </li>
                                         {% else %}
-                                            <li class="page-item disabled">
-                                                <span class="page-link">...</span>
+                                            <li class="page-item active">
+                                                <span class="page-link">{{ page_num }}</span>
                                             </li>
                                         {% endif %}
-                                    {% endfor %}
-
-                                    {% if pagination.has_next %}
-                                        <li class="page-item">
-                                            <a class="page-link" href="{{ url_for('project_details', project_id=project.id, page=pagination.next_num, search=search_query, status=status_filter, per_page=per_page) }}">
-                                                <i class="bi bi-chevron-right"></i>
-                                            </a>
+                                    {% else %}
+                                        <li class="page-item disabled">
+                                            <span class="page-link">...</span>
                                         </li>
                                     {% endif %}
-                                </ul>
-                            </nav>
-                            {% endif %}
+                                {% endfor %}
 
-                        {% else %}
-                            <div class="text-center py-5">
-                                {% if search_query or status_filter %}
-                                    <i class="bi bi-search display-1 text-muted mb-3"></i>
-                                    <h5>No Pages Found</h5>
-                                    <p class="text-muted mb-4">
-                                        No pages match your search criteria. Try adjusting your filters or search terms.
-                                    </p>
-                                    <a href="{{ url_for('project_details', project_id=project.id) }}" class="btn btn-outline-primary">
-                                        <i class="bi bi-x-circle me-1"></i>Clear Filters
-                                    </a>
-                                {% else %}
-                                    <i class="bi bi-search display-1 text-muted mb-3"></i>
-                                    <h5>No Pages Discovered Yet</h5>
-                                    <p class="text-muted mb-4">
-                                        Start crawling to discover pages that exist on both staging and production environments.
-                                    </p>
-                                    {% if job_status.status != 'scheduled' %}
-                                        <form method="POST" action="{{ url_for('start_crawl', project_id=project.id) }}" class="d-inline">
-                                            <button type="submit" class="btn btn-success">
-                                                <i class="bi bi-play-circle me-2"></i>Start Crawling Now
-                                            </button>
-                                        </form>
-                                    {% endif %}
+                                {% if pagination.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('project_details', project_id=project.id, page=pagination.next_num, search=search_query, status=status_filter, per_page=per_page) }}">
+                                            <i class="fas fa-chevron-right"></i>
+                                        </a>
+                                    </li>
                                 {% endif %}
-                            </div>
+                            </ul>
+                        </nav>
                         {% endif %}
-                    </div>
+
+                    {% else %}
+                        <div class="empty-state">
+                            {% if search_query or status_filter %}
+                                <div class="empty-icon">
+                                    <i class="fas fa-search"></i>
+                                </div>
+                                <h3 class="empty-title">No Pages Found</h3>
+                                <p class="empty-description">
+                                    No pages match your search criteria. Try adjusting your filters or search terms.
+                                </p>
+                                <a href="{{ url_for('project_details', project_id=project.id) }}" class="btn-action btn-secondary">
+                                    <i class="fas fa-times-circle"></i>Clear Filters
+                                </a>
+                            {% else %}
+                                <div class="empty-icon">
+                                    <i class="fas fa-search"></i>
+                                </div>
+                                <h3 class="empty-title">No Pages Discovered Yet</h3>
+                                <p class="empty-description">
+                                    Start crawling to discover pages that exist on both staging and production environments.
+                                </p>
+                                {% if job_status.status != 'scheduled' %}
+                                    <form method="POST" action="{{ url_for('start_crawl', project_id=project.id) }}" class="d-inline">
+                                        <button type="submit" class="btn-action" style="background: var(--success-color);">
+                                            <i class="fas fa-play-circle"></i>Start Crawling Now
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -449,16 +1010,16 @@
                 </div>
                 <div class="modal-body">
                     <p>Are you sure you want to delete the project <strong>"{{ project.name }}"</strong>?</p>
-                    <p class="text-danger">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
+                    <p style="color: var(--danger-color);">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
                         This action cannot be undone. All discovered pages and data will be permanently deleted.
                     </p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn-action btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <form method="POST" action="{{ url_for('delete_project', project_id=project.id) }}" class="d-inline">
-                        <button type="submit" class="btn btn-danger">
-                            <i class="bi bi-trash me-1"></i>Delete Project
+                        <button type="submit" class="btn-action btn-danger">
+                            <i class="fas fa-trash"></i>Delete Project
                         </button>
                     </form>
                 </div>
@@ -468,6 +1029,32 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const menuBtn = document.querySelector('.mobile-menu-btn');
+            
+            if (window.innerWidth <= 768 && 
+                !sidebar.contains(event.target) && 
+                !menuBtn.contains(event.target) &&
+                sidebar.classList.contains('open')) {
+                sidebar.classList.remove('open');
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const sidebar = document.getElementById('sidebar');
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('open');
+            }
+        });
+
         // Select all checkbox functionality
         document.getElementById('selectAll').addEventListener('change', function() {
             const checkboxes = document.querySelectorAll('.page-checkbox');
