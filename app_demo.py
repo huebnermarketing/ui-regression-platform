@@ -152,4 +152,4 @@ if __name__ == '__main__':
     print("Starting UI Diff Dashboard Demo...")
     print("Access the application at: http://localhost:5000")
     print("Demo credentials: username='demo', password='demo123'")
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0')
