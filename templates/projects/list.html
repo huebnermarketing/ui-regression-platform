@@ -238,6 +238,10 @@
         .project-card-header {
             padding: 1.5rem 1.5rem 1rem;
             border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
         }
 
         .project-title {
@@ -293,6 +297,43 @@
             border-radius: 4px;
             font-size: 0.75rem;
             font-weight: 600;
+        }
+
+        .status-badge {
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .status-badge.warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning-color);
+        }
+
+        .status-badge.success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+        }
+
+        .status-badge.secondary {
+            background: rgba(142, 144, 147, 0.1);
+            color: var(--subtle-text);
+        }
+
+        .status-badge.danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+        }
+
+        .status-badge.info {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--info-color);
         }
 
         .project-card-footer {
@@ -495,21 +536,59 @@
             {% endwith %}
 
             <!-- Projects Grid -->
-            {% if projects %}
+            {% if projects_with_status %}
                 <div class="project-grid">
-                    {% for project in projects %}
+                    {% for item in projects_with_status %}
+                        {% set project = item.project %}
+                        {% set job_status = item.job_status %}
+                        {% set page_count = item.page_count %}
                         <div class="project-card">
                             <div class="project-card-header">
-                                <h3 class="project-title">
-                                    <i class="fas fa-folder"></i>
-                                    {{ project.name }}
-                                </h3>
-                                <div class="project-meta">
-                                    <i class="fas fa-calendar"></i>
-                                    Created {{ project.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                <div>
+                                    <h3 class="project-title">
+                                        <i class="fas fa-folder"></i>
+                                        {{ project.name }}
+                                    </h3>
+                                    <div class="project-meta">
+                                        <i class="fas fa-calendar"></i>
+                                        Created {{ project.created_at|ist_datetime }}
+                                    </div>
+                                </div>
+                                <!-- Job Status Badge on the right -->
+                                <div>
+                                    {% if job_status.status == 'scheduled' %}
+                                        <span class="status-badge warning">
+                                            <i class="fas fa-clock"></i>Crawling in Progress
+                                        </span>
+                                    {% elif job_status.status == 'paused' %}
+                                        <span class="status-badge warning">
+                                            <i class="fas fa-pause-circle"></i>Job Paused
+                                        </span>
+                                    {% elif job_status.status == 'failed' %}
+                                        <span class="status-badge danger">
+                                            <i class="fas fa-exclamation-triangle"></i>Job Failed
+                                        </span>
+                                    {% elif job_status.status == 'completed' and page_count > 0 %}
+                                        <span class="status-badge success">
+                                            <i class="fas fa-check-circle"></i>Ready
+                                        </span>
+                                    {% elif job_status.status == 'running' %}
+                                        <span class="status-badge warning">
+                                            <i class="fas fa-clock"></i>Job Running
+                                        </span>
+                                    {% elif page_count > 0 %}
+                                        <span class="status-badge success">
+                                            <i class="fas fa-check-circle"></i>Ready
+                                        </span>
+                                    {% else %}
+                                        <span class="status-badge secondary">
+                                            <i class="fas fa-minus-circle"></i>Not Started
+                                        </span>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="project-card-body">
+                                
                                 <div class="url-section">
                                     <div class="url-label">Staging Environment</div>
                                     <div class="url-value">{{ project.staging_url }}</div>
@@ -521,7 +600,7 @@
                                 <div class="project-stats">
                                     <span class="stat-badge">
                                         <i class="fas fa-file-alt"></i>
-                                        {{ project.pages|length }} pages
+                                        {{ page_count }} pages
                                     </span>
                                 </div>
                             </div>
@@ -579,6 +658,27 @@
             const sidebar = document.getElementById('sidebar');
             if (window.innerWidth > 768) {
                 sidebar.classList.remove('open');
+            }
+        });
+
+        // Auto-refresh project statuses if any jobs are running
+        function refreshProjectStatuses() {
+            // Check if any projects have running jobs
+            const runningStatuses = document.querySelectorAll('.status-badge.warning');
+            
+            if (runningStatuses.length > 0) {
+                // Reload the page to get updated statuses
+                location.reload();
+            }
+        }
+
+        // Check for running jobs and set up auto-refresh
+        document.addEventListener('DOMContentLoaded', function() {
+            const runningStatuses = document.querySelectorAll('.status-badge.warning');
+            
+            if (runningStatuses.length > 0) {
+                // Refresh every 5 seconds if there are running jobs
+                setInterval(refreshProjectStatuses, 5000);
             }
         });
     </script>

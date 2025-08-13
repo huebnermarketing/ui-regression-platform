@@ -736,7 +736,7 @@
                                     <span><i class="fas fa-globe"></i> {{ project.page_count }} pages</span>
                                     <span><i class="fas fa-clock"></i> 
                                         {% if project.last_crawl %}
-                                            {{ project.last_crawl.created_at.strftime('%B %d, %Y') }}
+                                            {{ project.last_crawl.created_at|ist_date }}
                                         {% else %}
                                             Never crawled
                                         {% endif %}

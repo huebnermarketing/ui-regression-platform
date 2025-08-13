@@ -553,6 +553,33 @@
                 display: block;
             }
         }
+
+        /* Additional styles for multi-viewport UI */
+        .btn-xs {
+            padding: 0.125rem 0.25rem;
+            font-size: 0.75rem;
+            line-height: 1.2;
+            border-radius: 0.2rem;
+        }
+
+        .form-check {
+            margin-bottom: 0.5rem;
+        }
+
+        .form-check-label {
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .manual-capture-section {
+            background: var(--background);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -652,7 +679,7 @@
                 <p>Project Details & Page Management</p>
                 <div class="page-meta">
                     <i class="fas fa-calendar"></i>
-                    Created {{ project.created_at.strftime('%Y-%m-%d %H:%M') }}
+                    Created {{ project.created_at|ist_datetime }}
                 </div>
             </div>
             <div class="d-flex gap-2">
@@ -723,12 +750,28 @@
                     <div class="row align-items-center">
                         <div class="col-md-8">
                             <h6 class="mb-2">
-                                <i class="fas fa-robot me-2"></i>Crawl Status
+                                <i class="fas fa-robot me-2"></i>Project Status
                             </h6>
                             <div id="crawlStatus">
                                 {% if job_status.status == 'scheduled' %}
                                     <span class="status-badge warning">
-                                        <i class="fas fa-clock me-1"></i>Crawling in progress...
+                                        <i class="fas fa-clock me-1"></i>Job in progress...
+                                    </span>
+                                {% elif job_status.status == 'paused' %}
+                                    <span class="status-badge" style="background: rgba(245, 158, 11, 0.1); color: var(--warning-color);">
+                                        <i class="fas fa-pause-circle me-1"></i>Job paused
+                                    </span>
+                                {% elif job_status.status == 'failed' %}
+                                    <span class="status-badge" style="background: rgba(239, 68, 68, 0.1); color: var(--danger-color);">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>Job failed
+                                    </span>
+                                {% elif job_status.status == 'completed' and pages %}
+                                    <span class="status-badge success">
+                                        <i class="fas fa-check-circle me-1"></i>{{ pagination.total if pagination else pages|length }} pages discovered
+                                    </span>
+                                {% elif job_status.status == 'running' %}
+                                    <span class="status-badge warning">
+                                        <i class="fas fa-clock me-1"></i>Job running...
                                     </span>
                                 {% elif pages %}
                                     <span class="status-badge success">
@@ -746,7 +789,7 @@
                             <!-- Progress Bar -->
                             <div id="progressContainer" class="progress-container" style="display: none;">
                                 <div class="progress mb-2">
-                                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
                                          role="progressbar" style="width: 0%"></div>
                                 </div>
                                 <small id="progressMessage" style="color: var(--subtle-text);">Initializing...</small>
@@ -756,15 +799,24 @@
                             {% if job_status.status == 'scheduled' %}
                                 <form method="POST" action="{{ url_for('cancel_crawl', project_id=project.id) }}" class="d-inline">
                                     <button type="submit" class="btn-action" style="background: var(--warning-color);">
-                                        <i class="fas fa-stop-circle"></i>Cancel Crawl
+                                        <i class="fas fa-stop-circle"></i>Cancel Job
                                     </button>
                                 </form>
                             {% else %}
-                                <form method="POST" action="{{ url_for('start_crawl', project_id=project.id) }}" class="d-inline">
-                                    <button type="submit" class="btn-action" style="background: var(--success-color);">
-                                        <i class="fas fa-play-circle"></i>Start Crawling
-                                    </button>
-                                </form>
+                                <div class="d-flex gap-2 justify-content-end">
+                                    <form method="POST" action="{{ url_for('start_crawl', project_id=project.id) }}" class="d-inline">
+                                        <button type="submit" class="btn-action" style="background: var(--success-color);">
+                                            <i class="fas fa-play-circle"></i>Start Crawling
+                                        </button>
+                                    </form>
+                                    {% if pages %}
+                                        <form id="findDifferenceForm" method="POST" action="{{ url_for('find_difference', project_id=project.id) }}" class="d-inline">
+                                            <button type="submit" id="findDifferenceBtn" class="btn-action" style="background: #9333ea;">
+                                                <i class="fas fa-search-plus"></i>Find Difference
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </div>
                             {% endif %}
                         </div>
                     </div>
@@ -776,14 +828,14 @@
             <div class="filter-card">
                 <form method="GET" action="{{ url_for('project_details', project_id=project.id) }}">
                     <div class="row g-3 align-items-end">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label for="search" class="form-label">
                                 <i class="fas fa-search"></i>Search Pages
                             </label>
-                            <input type="text" class="form-control" id="search" name="search" 
+                            <input type="text" class="form-control" id="search" name="search"
                                    value="{{ search_query }}" placeholder="Search by path, title, or URL...">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label for="status" class="form-label">
                                 <i class="fas fa-filter"></i>Filter by Status
                             </label>
@@ -814,6 +866,7 @@
                             </a>
                         </div>
                     </div>
+                    
                 </form>
             </div>
             {% endif %}
@@ -831,9 +884,11 @@
                             {% endif %}
                         </h5>
                         {% if pages %}
-                            <button class="btn-action btn-secondary" disabled>
-                                <i class="fas fa-eye"></i>Proceed to Diff (Phase 3)
-                            </button>
+                            <div class="d-flex gap-2">
+                                <button class="btn-action btn-secondary" disabled>
+                                    <i class="fas fa-eye"></i>View Dashboard
+                                </button>
+                            </div>
                         {% endif %}
                     </div>
                     {% if pagination and pagination.total > 0 %}
@@ -850,24 +905,18 @@
                             <table class="table modern-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 50px;">
-                                            <input type="checkbox" class="form-check-input" id="selectAll">
-                                        </th>
                                         <th>Page</th>
                                         <th>Staging URL</th>
                                         <th>Production URL</th>
-                                        <th>Status</th>
-                                        <th>Last Crawled</th>
-                                        <th>Screenshot</th>
+                                        <th>Find Difference Status</th>
+                                        <th>Last Run</th>
+                                        <th>Actions</th>
+                                        <th>Results</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for page in pages %}
                                         <tr>
-                                            <td>
-                                                <input type="checkbox" class="form-check-input page-checkbox"
-                                                       value="{{ page.id }}" name="selected_pages">
-                                            </td>
                                             <td class="breadcrumb-cell">
                                                 <div class="page-breadcrumb">
                                                     {% if page.page_name %}
@@ -895,25 +944,141 @@
                                                 </a>
                                             </td>
                                             <td>
-                                                {% if page.status == 'pending' %}
+                                                {% if page.find_diff_status == 'pending' %}
                                                     <span class="status-badge secondary">Pending</span>
-                                                {% elif page.status == 'crawled' %}
-                                                    <span class="status-badge success">Crawled</span>
-                                                {% elif page.status == 'ready_for_diff' %}
-                                                    <span class="status-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-color);">Ready for Diff</span>
+                                                {% elif page.find_diff_status == 'capturing' %}
+                                                    <span class="status-badge warning">Capturing Screenshots</span>
+                                                {% elif page.find_diff_status == 'captured' %}
+                                                    <span class="status-badge" style="background: rgba(16, 185, 129, 0.1); color: var(--success-color);">Screenshots Captured</span>
+                                                {% elif page.find_diff_status == 'diffing' %}
+                                                    <span class="status-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-color);">Generating Diffs</span>
+                                                {% elif page.find_diff_status == 'completed' %}
+                                                    <span class="status-badge" style="background: rgba(147, 51, 234, 0.1); color: #9333ea;">Completed</span>
+                                                {% elif page.find_diff_status == 'failed' %}
+                                                    <span class="status-badge" style="background: rgba(239, 68, 68, 0.1); color: var(--danger-color);">Failed</span>
+                                                {% elif page.find_diff_status == 'no_baseline' %}
+                                                    <span class="status-badge" style="background: rgba(245, 158, 11, 0.1); color: var(--warning-color);">No Baseline</span>
+                                                {% endif %}
+                                                
+                                                {% if page.current_run_id %}
+                                                    <small style="color: var(--subtle-text); display: block; margin-top: 2px;">
+                                                        Run: {{ page.current_run_id }}
+                                                    </small>
                                                 {% endif %}
                                             </td>
                                             <td>
-                                                {% if page.last_crawled %}
-                                                    <small style="color: var(--subtle-text);">{{ page.last_crawled.strftime('%m/%d %H:%M') }}</small>
+                                                {% if page.last_run_at %}
+                                                    <small style="color: var(--subtle-text);">{{ page.last_run_at|ist_short_datetime }}</small>
                                                 {% else %}
                                                     <small style="color: var(--subtle-text);">Never</small>
                                                 {% endif %}
                                             </td>
                                             <td>
-                                                <span style="color: var(--subtle-text);">
-                                                    <i class="fas fa-image me-1"></i>Phase 3
-                                                </span>
+                                                <button class="btn btn-sm btn-outline-primary manual-capture-btn"
+                                                        data-page-id="{{ page.id }}"
+                                                        data-page-name="{{ page.page_name or page.path }}"
+                                                        title="Capture screenshots for all viewports">
+                                                    <i class="fas fa-camera"></i> Capture
+                                                </button>
+                                            </td>
+                                            <td>
+                                                {% if page.find_diff_status == 'completed' and page.current_run_id %}
+                                                    <div class="d-flex flex-column gap-1">
+                                                        <!-- Desktop Results -->
+                                                        {% if page.diff_status_desktop == 'completed' %}
+                                                        <div class="d-flex gap-1 align-items-center">
+                                                            <i class="fas fa-desktop text-muted" style="width: 16px;"></i>
+                                                            {% if page.current_run_id %}
+                                                                <a href="{{ url_for('serve_run_file', filename=page.project_id|string + '/' + page.current_run_id + '/diffs/desktop/' + (page.path|replace('/', 'home')|replace('\\', '_')|replace('_', '-')) + '_diff.png') }}"
+                                                                   target="_blank" class="btn btn-xs btn-outline-warning" title="Desktop Diff">
+                                                                    <i class="fas fa-eye"></i>
+                                                                </a>
+                                                            {% endif %}
+                                                            {% if page.diff_mismatch_pct_desktop is not none %}
+                                                                <small class="text-muted">{{ "%.1f"|format(page.diff_mismatch_pct_desktop) }}%</small>
+                                                            {% endif %}
+                                                        </div>
+                                                        {% elif page.diff_status_desktop == 'no_baseline' %}
+                                                        <div class="d-flex gap-1 align-items-center">
+                                                            <i class="fas fa-desktop text-muted" style="width: 16px;"></i>
+                                                            <small class="text-warning">No baseline</small>
+                                                        </div>
+                                                        {% elif page.diff_status_desktop == 'failed' %}
+                                                        <div class="d-flex gap-1 align-items-center">
+                                                            <i class="fas fa-desktop text-muted" style="width: 16px;"></i>
+                                                            <small class="text-danger">Failed</small>
+                                                        </div>
+                                                        {% endif %}
+                                                        
+                                                        <!-- Tablet Results -->
+                                                        {% if page.diff_status_tablet == 'completed' %}
+                                                        <div class="d-flex gap-1 align-items-center">
+                                                            <i class="fas fa-tablet-alt text-muted" style="width: 16px;"></i>
+                                                            {% if page.current_run_id %}
+                                                                <a href="{{ url_for('serve_run_file', filename=page.project_id|string + '/' + page.current_run_id + '/diffs/tablet/' + (page.path|replace('/', 'home')|replace('\\', '_')|replace('_', '-')) + '_diff.png') }}"
+                                                                   target="_blank" class="btn btn-xs btn-outline-warning" title="Tablet Diff">
+                                                                    <i class="fas fa-eye"></i>
+                                                                </a>
+                                                            {% endif %}
+                                                            {% if page.diff_mismatch_pct_tablet is not none %}
+                                                                <small class="text-muted">{{ "%.1f"|format(page.diff_mismatch_pct_tablet) }}%</small>
+                                                            {% endif %}
+                                                        </div>
+                                                        {% elif page.diff_status_tablet == 'no_baseline' %}
+                                                        <div class="d-flex gap-1 align-items-center">
+                                                            <i class="fas fa-tablet-alt text-muted" style="width: 16px;"></i>
+                                                            <small class="text-warning">No baseline</small>
+                                                        </div>
+                                                        {% elif page.diff_status_tablet == 'failed' %}
+                                                        <div class="d-flex gap-1 align-items-center">
+                                                            <i class="fas fa-tablet-alt text-muted" style="width: 16px;"></i>
+                                                            <small class="text-danger">Failed</small>
+                                                        </div>
+                                                        {% endif %}
+                                                        
+                                                        <!-- Mobile Results -->
+                                                        {% if page.diff_status_mobile == 'completed' %}
+                                                        <div class="d-flex gap-1 align-items-center">
+                                                            <i class="fas fa-mobile-alt text-muted" style="width: 16px;"></i>
+                                                            {% if page.current_run_id %}
+                                                                <a href="{{ url_for('serve_run_file', filename=page.project_id|string + '/' + page.current_run_id + '/diffs/mobile/' + (page.path|replace('/', 'home')|replace('\\', '_')|replace('_', '-')) + '_diff.png') }}"
+                                                                   target="_blank" class="btn btn-xs btn-outline-warning" title="Mobile Diff">
+                                                                    <i class="fas fa-eye"></i>
+                                                                </a>
+                                                            {% endif %}
+                                                            {% if page.diff_mismatch_pct_mobile is not none %}
+                                                                <small class="text-muted">{{ "%.1f"|format(page.diff_mismatch_pct_mobile) }}%</small>
+                                                            {% endif %}
+                                                        </div>
+                                                        {% elif page.diff_status_mobile == 'no_baseline' %}
+                                                        <div class="d-flex gap-1 align-items-center">
+                                                            <i class="fas fa-mobile-alt text-muted" style="width: 16px;"></i>
+                                                            <small class="text-warning">No baseline</small>
+                                                        </div>
+                                                        {% elif page.diff_status_mobile == 'failed' %}
+                                                        <div class="d-flex gap-1 align-items-center">
+                                                            <i class="fas fa-mobile-alt text-muted" style="width: 16px;"></i>
+                                                            <small class="text-danger">Failed</small>
+                                                        </div>
+                                                        {% endif %}
+                                                    </div>
+                                                {% elif page.find_diff_status == 'failed' %}
+                                                    <span style="color: var(--danger-color);">
+                                                        <i class="fas fa-exclamation-triangle me-1"></i>Failed
+                                                    </span>
+                                                {% elif page.find_diff_status in ['capturing', 'diffing'] %}
+                                                    <span style="color: var(--warning-color);">
+                                                        <i class="fas fa-clock me-1"></i>Processing
+                                                    </span>
+                                                {% elif page.find_diff_status == 'captured' %}
+                                                    <span style="color: var(--info-color);">
+                                                        <i class="fas fa-check me-1"></i>Ready for Diff
+                                                    </span>
+                                                {% else %}
+                                                    <span style="color: var(--subtle-text);">
+                                                        <i class="fas fa-minus me-1"></i>N/A
+                                                    </span>
+                                                {% endif %}
                                             </td>
                                         </tr>
                                     {% endfor %}
@@ -1055,13 +1220,150 @@
             }
         });
 
-        // Select all checkbox functionality
-        document.getElementById('selectAll').addEventListener('change', function() {
-            const checkboxes = document.querySelectorAll('.page-checkbox');
-            checkboxes.forEach(checkbox => {
-                checkbox.checked = this.checked;
-            });
+
+        // Manual capture button functionality
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('manual-capture-btn') || e.target.closest('.manual-capture-btn')) {
+                const button = e.target.classList.contains('manual-capture-btn') ? e.target : e.target.closest('.manual-capture-btn');
+                const pageId = button.getAttribute('data-page-id');
+                const pageName = button.getAttribute('data-page-name');
+                
+                // Disable button and show loading
+                button.disabled = true;
+                const originalHtml = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Capturing...';
+                
+                // Prepare request payload with default settings
+                const requestPayload = {
+                    viewports: ['desktop', 'tablet', 'mobile'],  // All viewports
+                    envs: ['staging', 'production'],             // Both environments
+                    run_mode: 'capture_only'                     // Screenshots only
+                };
+                
+                // Make AJAX request for manual capture
+                fetch(`{{ url_for('manual_capture_page', project_id=project.id, page_id=0) }}`.replace('0', pageId), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestPayload)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Show toast notification
+                    showToast(data.success ? 'success' : 'error', data.message);
+                    
+                    // Re-enable button
+                    button.disabled = false;
+                    button.innerHTML = originalHtml;
+                    
+                    // Update row status live if successful
+                    if (data.success) {
+                        updateRowStatus(pageId, data);
+                        
+                        // Refresh page after delay to show all updates
+                        setTimeout(() => {
+                            location.reload();
+                        }, 2000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('error', `Error capturing page: ${error.message}`);
+                    
+                    // Re-enable button
+                    button.disabled = false;
+                    button.innerHTML = originalHtml;
+                });
+            }
         });
+
+        // Function to update row status live
+        function updateRowStatus(pageId, data) {
+            const row = document.querySelector(`input[data-page-id="${pageId}"]`)?.closest('tr');
+            if (!row) return;
+            
+            // Update Find Difference Status column
+            const statusCell = row.cells[3]; // 4th column (0-indexed)
+            if (statusCell) {
+                let statusHtml = '';
+                if (data.updated_status === 'captured') {
+                    statusHtml = '<span class="status-badge" style="background: rgba(16, 185, 129, 0.1); color: var(--success-color);">Screenshots Captured</span>';
+                } else if (data.updated_status === 'capturing') {
+                    statusHtml = '<span class="status-badge warning">Capturing Screenshots</span>';
+                }
+                
+                if (data.run_id) {
+                    statusHtml += `<small style="color: var(--subtle-text); display: block; margin-top: 2px;">Run: ${data.run_id}</small>`;
+                }
+                
+                statusCell.innerHTML = statusHtml;
+            }
+            
+            // Update Last Run column
+            const lastRunCell = row.cells[4]; // 5th column (0-indexed)
+            if (lastRunCell) {
+                const now = new Date();
+                const timeStr = now.toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+                lastRunCell.innerHTML = `<small style="color: var(--subtle-text);">${timeStr}</small>`;
+            }
+            
+            // Update Results column to show baseline set for first run
+            const resultsCell = row.cells[6]; // 7th column (0-indexed)
+            if (resultsCell && data.updated_status === 'captured') {
+                // Show baseline set indicators for all viewports
+                resultsCell.innerHTML = `
+                    <div class="d-flex flex-column gap-1">
+                        <div class="d-flex gap-1 align-items-center">
+                            <i class="fas fa-desktop text-muted" style="width: 16px;"></i>
+                            <small class="text-success">Baseline set</small>
+                        </div>
+                        <div class="d-flex gap-1 align-items-center">
+                            <i class="fas fa-tablet-alt text-muted" style="width: 16px;"></i>
+                            <small class="text-success">Baseline set</small>
+                        </div>
+                        <div class="d-flex gap-1 align-items-center">
+                            <i class="fas fa-mobile-alt text-muted" style="width: 16px;"></i>
+                            <small class="text-success">Baseline set</small>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Toast notification function
+        function showToast(type, message) {
+            // Create toast element
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show`;
+            toast.style.position = 'fixed';
+            toast.style.top = '20px';
+            toast.style.right = '20px';
+            toast.style.zIndex = '9999';
+            toast.style.minWidth = '300px';
+            toast.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            // Add to page
+            document.body.appendChild(toast);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 5000);
+        }
 
         // Progress tracking and status updates
         function updateProgress(progressData) {
@@ -1089,7 +1391,7 @@
             }
         }
 
-        // Auto-refresh crawl status if crawling is in progress
+        // Auto-refresh crawl status if crawling is in progress or paused
         function refreshStatus() {
             fetch('{{ url_for("crawl_status", project_id=project.id) }}')
                 .then(response => response.json())
@@ -1102,8 +1404,12 @@
                     // Update last updated time
                     document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
                     
-                    if (data.job_status.status !== 'scheduled') {
-                        // Crawl completed, reload page after a short delay
+                    // Update status display in real-time
+                    updateStatusDisplay(data.job_status);
+                    
+                    // Only reload page if status changed from scheduled to completed/failed
+                    if (data.job_status.status === 'completed' || data.job_status.status === 'failed') {
+                        // Job completed or failed, reload page after a short delay
                         setTimeout(() => {
                             location.reload();
                         }, 2000);
@@ -1112,12 +1418,63 @@
                 .catch(error => console.error('Error checking status:', error));
         }
 
+        // Update status display without full page reload
+        function updateStatusDisplay(jobStatus) {
+            const statusElement = document.getElementById('crawlStatus');
+            if (!statusElement) return;
+            
+            let statusHtml = '';
+            
+            if (jobStatus.status === 'scheduled') {
+                statusHtml = `
+                    <span class="status-badge warning">
+                        <i class="fas fa-clock me-1"></i>Job in progress...
+                    </span>
+                `;
+            } else if (jobStatus.status === 'paused') {
+                statusHtml = `
+                    <span class="status-badge" style="background: rgba(245, 158, 11, 0.1); color: var(--warning-color);">
+                        <i class="fas fa-pause-circle me-1"></i>Job paused
+                    </span>
+                `;
+            } else if (jobStatus.status === 'failed') {
+                statusHtml = `
+                    <span class="status-badge" style="background: rgba(239, 68, 68, 0.1); color: var(--danger-color);">
+                        <i class="fas fa-exclamation-triangle me-1"></i>Job failed
+                    </span>
+                `;
+            } else if (jobStatus.status === 'running') {
+                statusHtml = `
+                    <span class="status-badge warning">
+                        <i class="fas fa-clock me-1"></i>Job running...
+                    </span>
+                `;
+            } else if (jobStatus.status === 'completed') {
+                statusHtml = `
+                    <span class="status-badge success">
+                        <i class="fas fa-check-circle me-1"></i>Job completed
+                    </span>
+                `;
+            } else {
+                statusHtml = `
+                    <span class="status-badge secondary">
+                        <i class="fas fa-minus-circle me-1"></i>No crawl performed yet
+                    </span>
+                `;
+            }
+            
+            statusElement.innerHTML = statusHtml;
+        }
+
     </script>
 
-    {% if job_status.status == 'scheduled' %}
+    {% if job_status.status in ['scheduled', 'paused', 'running'] %}
     <script>
-        // Show progress container and start checking status
-        document.getElementById('progressContainer').style.display = 'block';
+        // Show progress container for active jobs
+        const currentStatus = '{{ job_status.status }}';
+        if (currentStatus === 'scheduled') {
+            document.getElementById('progressContainer').style.display = 'block';
+        }
         
         // Check status every 3 seconds for more responsive updates
         const statusInterval = setInterval(refreshStatus, 3000);

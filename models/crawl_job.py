@@ -8,6 +8,7 @@ class CrawlJob(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
     status = db.Column(db.Enum('pending', 'running', 'completed', 'failed', 'paused', name='crawl_job_status'),
                       default='pending', nullable=False)
+    job_type = db.Column(db.String(20), default='crawl', nullable=False)
     total_pages = db.Column(db.Integer, default=0, nullable=False)
     started_at = db.Column(db.DateTime, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
@@ -33,10 +34,39 @@ class CrawlJob(db.Model):
         self.start_job()
     
     def complete_job(self, total_pages):
-        """Mark job as completed and set completion details"""
-        self.status = 'completed'
-        self.completed_at = datetime.utcnow()
-        self.total_pages = total_pages
+        """Mark job as completed and set completion details - ATOMIC & IDEMPOTENT"""
+        from sqlalchemy import text
+        from models import db
+        
+        # Get current UTC time for consistent timezone handling
+        completion_time = datetime.utcnow()
+        
+        # Atomic completion - only update if still running
+        # Use explicit UTC timestamp instead of NOW() to avoid timezone issues
+        result = db.session.execute(text('''
+            UPDATE crawl_jobs
+            SET status='completed',
+                completed_at=:completion_time,
+                total_pages=:total_pages,
+                error_message=NULL
+            WHERE id=:job_id AND status='running'
+        '''), {
+            'job_id': self.id,
+            'total_pages': total_pages,
+            'completion_time': completion_time
+        })
+        
+        if result.rowcount == 1:
+            # Update local object to reflect database changes
+            self.status = 'completed'
+            self.completed_at = completion_time
+            self.total_pages = total_pages
+            self.error_message = None
+            return True
+        else:
+            # Job was already completed or not running - this is OK (idempotent)
+            print(f"Job {self.id} completion was idempotent (already completed or not running)")
+            return False
     
     def fail_job(self, error_message):
         """Mark job as failed and set error details"""
@@ -54,10 +84,41 @@ class CrawlJob(db.Model):
     
     @property
     def duration(self):
-        """Calculate duration of the job in seconds"""
-        if self.started_at and self.completed_at:
-            return (self.completed_at - self.started_at).total_seconds()
-        return None
+        """Calculate duration of the job in seconds using UTC epoch time"""
+        if not self.started_at:
+            return None
+        
+        # Convert started_at to UTC epoch seconds (always treat as UTC)
+        # This avoids timezone confusion by working with raw epoch time
+        if self.started_at.tzinfo is None:
+            # Assume naive datetime is already in UTC
+            started_epoch = self.started_at.timestamp()
+        else:
+            # Convert timezone-aware datetime to UTC epoch
+            started_epoch = self.started_at.timestamp()
+        
+        # Determine end time epoch
+        if self.completed_at:
+            # Job is completed/failed - use completed_at
+            if self.completed_at.tzinfo is None:
+                # Assume naive datetime is already in UTC
+                end_epoch = self.completed_at.timestamp()
+            else:
+                # Convert timezone-aware datetime to UTC epoch
+                end_epoch = self.completed_at.timestamp()
+        elif self.status == 'running':
+            # Job is still running, use current UTC time
+            import time
+            end_epoch = time.time()
+        else:
+            # Job is pending/paused and not completed
+            return None
+        
+        # Calculate duration in seconds using epoch time difference
+        duration_seconds = end_epoch - started_epoch
+        
+        # Ensure duration is not negative (can happen with clock skew)
+        return max(0, duration_seconds)
     
     @property
     def duration_formatted(self):

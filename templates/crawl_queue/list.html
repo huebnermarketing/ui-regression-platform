@@ -865,7 +865,7 @@
                     <i class="fas fa-filter"></i>Filter & Search
                 </div>
                 <form method="GET" class="row g-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="status" class="form-label">Filter by Status</label>
                         <select name="status" id="status" class="form-select">
                             <option value="">All Statuses</option>
@@ -876,17 +876,29 @@
                             <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
                         </select>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label for="search" class="form-label">Search Projects</label>
-                        <input type="text" name="search" id="search" class="form-control" 
+                        <input type="text" name="search" id="search" class="form-control"
                                placeholder="Search by project name..." value="{{ search_query }}">
                     </div>
                     <div class="col-md-2">
+                        <label for="per_page" class="form-label">Per Page</label>
+                        <select name="per_page" id="per_page" class="form-select">
+                            <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                            <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+                            <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                            <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label">&nbsp;</label>
-                        <div class="d-grid">
+                        <div class="d-flex gap-2">
                             <button type="submit" class="btn-action">
                                 <i class="fas fa-search"></i>Filter
                             </button>
+                            <a href="{{ url_for('crawl_queue') }}" class="btn-action btn-secondary">
+                                <i class="fas fa-times-circle"></i>Clear
+                            </a>
                         </div>
                     </div>
                 </form>
@@ -909,7 +921,7 @@
                                     <div>
                                         <div class="task-project">{{ job.project.name }}</div>
                                         <div class="task-time">
-                                            Started: {{ job.started_at.strftime('%H:%M:%S') if job.started_at else 'Unknown' }}
+                                            Started: {{ job.started_at|ist_time if job.started_at else 'Unknown' }}
                                         </div>
                                     </div>
                                     <span class="status-badge running">
@@ -936,8 +948,20 @@
             <div class="section-card">
                 <div class="section-header">
                     <h3 class="section-title">
-                        <i class="fas fa-list"></i>All Tasks ({{ all_jobs|length }} total)
+                        <i class="fas fa-list"></i>All Tasks
+                        {% if pagination %}
+                            <span class="status-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-color);">{{ pagination.total }}</span>
+                        {% else %}
+                            ({{ all_jobs|length }} total)
+                        {% endif %}
                     </h3>
+                    {% if pagination and pagination.total > 0 %}
+                    <div style="color: var(--subtle-text); font-size: 0.875rem; margin-top: 0.5rem;">
+                        Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to
+                        {{ pagination.page * pagination.per_page if pagination.page * pagination.per_page < pagination.total else pagination.total }}
+                        of {{ pagination.total }} jobs
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="table-card-body">
                     {% if all_jobs %}
@@ -988,14 +1012,14 @@
                                 </td>
                                 <td>
                                     {% if job.started_at %}
-                                        {{ job.started_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                                        {{ job.started_at|ist_datetime }}
                                     {% else %}
                                         <span style="color: var(--subtle-text);">Not started</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if job.completed_at %}
-                                        {{ job.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                                        {{ job.completed_at|ist_datetime }}
                                     {% else %}
                                         <span style="color: var(--subtle-text);">-</span>
                                     {% endif %}
@@ -1053,11 +1077,66 @@
                             <i class="fas fa-tasks"></i>
                         </div>
                         <div class="empty-title">No crawl jobs found</div>
-                        <div class="empty-description">Start crawling a project to see jobs here.</div>
-                        <a href="{{ url_for('dashboard') }}" class="btn-action">
-                            <i class="fas fa-plus"></i>Go to Dashboard
-                        </a>
+                        <div class="empty-description">
+                            {% if status_filter or search_query %}
+                                No jobs match your search criteria. Try adjusting your filters.
+                            {% else %}
+                                Start crawling a project to see jobs here.
+                            {% endif %}
+                        </div>
+                        {% if status_filter or search_query %}
+                            <a href="{{ url_for('crawl_queue') }}" class="btn-action btn-secondary">
+                                <i class="fas fa-times-circle"></i>Clear Filters
+                            </a>
+                        {% else %}
+                            <a href="{{ url_for('dashboard') }}" class="btn-action">
+                                <i class="fas fa-plus"></i>Go to Dashboard
+                            </a>
+                        {% endif %}
                     </div>
+                    {% endif %}
+                    
+                    <!-- Pagination -->
+                    {% if pagination and pagination.pages > 1 %}
+                    <nav aria-label="Page navigation" class="p-3">
+                        <ul class="pagination justify-content-center">
+                            {% if pagination.has_prev %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('crawl_queue', page=pagination.prev_num, status=status_filter, search=search_query, per_page=per_page) }}">
+                                        <i class="fas fa-chevron-left"></i>
+                                    </a>
+                                </li>
+                            {% endif %}
+
+                            {% for page_num in pagination.iter_pages() %}
+                                {% if page_num %}
+                                    {% if page_num != pagination.page %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="{{ url_for('crawl_queue', page=page_num, status=status_filter, search=search_query, per_page=per_page) }}">
+                                                {{ page_num }}
+                                            </a>
+                                        </li>
+                                    {% else %}
+                                        <li class="page-item active">
+                                            <span class="page-link">{{ page_num }}</span>
+                                        </li>
+                                    {% endif %}
+                                {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if pagination.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('crawl_queue', page=pagination.next_num, status=status_filter, search=search_query, per_page=per_page) }}">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
                     {% endif %}
                 </div>
             </div>
@@ -1122,11 +1201,14 @@
                         location.reload();
                     } else {
                         alert('Failed to pause job: ' + data.message);
+                        // Refresh the page to show current status
+                        location.reload();
                     }
                 })
                 .catch(error => {
                     console.error('Error pausing job:', error);
-                    alert('Failed to pause job');
+                    alert('Failed to pause job: Network error');
+                    location.reload();
                 });
             }
         }
@@ -1145,11 +1227,14 @@
                         location.reload();
                     } else {
                         alert('Failed to stop job: ' + data.message);
+                        // Refresh the page to show current status
+                        location.reload();
                     }
                 })
                 .catch(error => {
                     console.error('Error stopping job:', error);
-                    alert('Failed to stop job');
+                    alert('Failed to stop job: Network error');
+                    location.reload();
                 });
             }
         }
@@ -1178,6 +1263,7 @@
                     updateKPIs(data.kpis);
                     updateActiveTasks(data.active_jobs);
                     updateAllTasksTable(data.all_jobs);
+                    updatePagination(data.pagination);
                     
                     // Stop auto-refresh if no running jobs
                     if (!data.has_running_jobs) {
@@ -1326,6 +1412,25 @@
             `;
             
             return row;
+        }
+        
+        function updatePagination(paginationData) {
+            // Update pagination info in section header
+            const sectionTitle = document.querySelector('.section-title');
+            if (sectionTitle && paginationData) {
+                const badge = sectionTitle.querySelector('.status-badge');
+                if (badge) {
+                    badge.textContent = paginationData.total;
+                }
+                
+                // Update pagination info text
+                const paginationInfo = sectionTitle.parentElement.querySelector('div[style*="color: var(--subtle-text)"]');
+                if (paginationInfo && paginationData.total > 0) {
+                    const start = ((paginationData.page - 1) * paginationData.per_page) + 1;
+                    const end = Math.min(paginationData.page * paginationData.per_page, paginationData.total);
+                    paginationInfo.innerHTML = `Showing ${start} to ${end} of ${paginationData.total} jobs`;
+                }
+            }
         }
         
         // Start auto-refresh

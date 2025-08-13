@@ -3,6 +3,8 @@ from flask_migrate import Migrate
 from flask_login import LoginManager, login_required, current_user
 from dotenv import load_dotenv
 import os
+from datetime import datetime
+import pytz
 
 # Load environment variables
 load_dotenv()
@@ -49,6 +51,77 @@ from models.crawl_job import CrawlJob
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# Custom Jinja2 filters for IST datetime formatting
+def to_ist_date(dt):
+    """Convert datetime to IST and format as DD/MM/YYYY"""
+    if dt is None:
+        return 'Never'
+    
+    # Convert to IST timezone
+    ist = pytz.timezone('Asia/Kolkata')
+    if dt.tzinfo is None:
+        # Assume UTC if no timezone info
+        utc_dt = pytz.utc.localize(dt)
+    else:
+        utc_dt = dt.astimezone(pytz.utc)
+    
+    ist_dt = utc_dt.astimezone(ist)
+    return ist_dt.strftime('%d/%m/%Y')
+
+def to_ist_time(dt):
+    """Convert datetime to IST and format as HH:MM AM/PM"""
+    if dt is None:
+        return 'Never'
+    
+    # Convert to IST timezone
+    ist = pytz.timezone('Asia/Kolkata')
+    if dt.tzinfo is None:
+        # Assume UTC if no timezone info
+        utc_dt = pytz.utc.localize(dt)
+    else:
+        utc_dt = dt.astimezone(pytz.utc)
+    
+    ist_dt = utc_dt.astimezone(ist)
+    return ist_dt.strftime('%I:%M %p')
+
+def to_ist_datetime(dt):
+    """Convert datetime to IST and format as DD/MM/YYYY HH:MM AM/PM"""
+    if dt is None:
+        return 'Never'
+    
+    # Convert to IST timezone
+    ist = pytz.timezone('Asia/Kolkata')
+    if dt.tzinfo is None:
+        # Assume UTC if no timezone info
+        utc_dt = pytz.utc.localize(dt)
+    else:
+        utc_dt = dt.astimezone(pytz.utc)
+    
+    ist_dt = utc_dt.astimezone(ist)
+    return ist_dt.strftime('%d/%m/%Y %I:%M %p')
+
+def to_ist_short_datetime(dt):
+    """Convert datetime to IST and format as DD/MM HH:MM AM/PM (short format)"""
+    if dt is None:
+        return 'Never'
+    
+    # Convert to IST timezone
+    ist = pytz.timezone('Asia/Kolkata')
+    if dt.tzinfo is None:
+        # Assume UTC if no timezone info
+        utc_dt = pytz.utc.localize(dt)
+    else:
+        utc_dt = dt.astimezone(pytz.utc)
+    
+    ist_dt = utc_dt.astimezone(ist)
+    return ist_dt.strftime('%d/%m %I:%M %p')
+
+# Register the filters with Jinja2
+app.jinja_env.filters['ist_date'] = to_ist_date
+app.jinja_env.filters['ist_time'] = to_ist_time
+app.jinja_env.filters['ist_datetime'] = to_ist_datetime
+app.jinja_env.filters['ist_short_datetime'] = to_ist_short_datetime
+
 # Initialize crawler scheduler (working version)
 import threading
 import time
@@ -59,12 +132,12 @@ from typing import Set, List, Tuple
 from crawler.crawler import WebCrawler
 
 class EnhancedWebCrawler:
-    def __init__(self, max_pages=200, delay=0.3):
+    def __init__(self, max_pages=20, delay=0.3):
         """
         Enhanced web crawler with better depth coverage and external link filtering
         
         Args:
-            max_pages (int): Maximum number of pages to crawl per domain (increased for better coverage)
+            max_pages (int): Maximum number of pages to crawl per domain (limited to 20 for testing)
             delay (float): Delay between requests in seconds (reduced for faster crawling)
         """
         self.max_pages = max_pages
@@ -276,7 +349,7 @@ class EnhancedWebCrawler:
         crawled_urls = set()
         
         print(f"Starting enhanced crawl of domain: {base_domain}")
-        print(f"Max pages to crawl: {self.max_pages}")
+        print(f"Max pages to crawl: {self.max_pages} (limited for testing)")
         
         while urls_to_crawl and len(crawled_urls) < self.max_pages:
             # Check for stop signal
@@ -397,11 +470,34 @@ class WorkingCrawlerScheduler:
             orphaned_jobs = CrawlJob.query.filter_by(status='running').all()
             
             for job in orphaned_jobs:
-                print(f"Found orphaned running job {job.id} for project {job.project_id}")
-                # Mark these jobs as failed since we can't recover the actual threads
-                job.fail_job("Job interrupted by application restart")
-                db.session.commit()
-                print(f"Marked orphaned job {job.id} as failed")
+                print(f"Found potentially orphaned running job {job.id} for project {job.project_id}")
+                
+                # Check if job has been running for more than 30 minutes (likely truly orphaned)
+                from datetime import datetime, timezone
+                if job.started_at:
+                    # Ensure both datetimes are timezone-aware for comparison
+                    current_time = datetime.now(timezone.utc)
+                    if job.started_at.tzinfo is None:
+                        # If job.started_at is naive, assume it's UTC
+                        job_start_time = job.started_at.replace(tzinfo=timezone.utc)
+                    else:
+                        job_start_time = job.started_at
+                    time_since_start = current_time - job_start_time
+                    if time_since_start.total_seconds() > 1800:  # 30 minutes
+                        print(f"Job {job.id} has been running for {time_since_start}, marking as failed")
+                        job.fail_job("Job interrupted by application restart (running too long)")
+                        db.session.commit()
+                        print(f"Marked truly orphaned job {job.id} as failed")
+                    else:
+                        print(f"Job {job.id} started recently ({time_since_start} ago), leaving as running")
+                        # Job started recently, might still be running in background - leave it alone
+                        # The orphan cleanup in crawl_queue routes will handle it if it's truly stuck
+                else:
+                    # No start time, definitely orphaned
+                    print(f"Job {job.id} has no start time, marking as failed")
+                    job.fail_job("Job interrupted by application restart (no start time)")
+                    db.session.commit()
+                    print(f"Marked orphaned job {job.id} as failed")
     
     def schedule_crawl(self, project_id):
         """Start a crawl job in a background thread"""
@@ -515,8 +611,8 @@ class WorkingCrawlerScheduler:
                     db.session.commit()
                     return
                 
-                # Initialize enhanced crawler with better settings
-                crawler = EnhancedWebCrawler(max_pages=200, delay=0.3)
+                # Initialize enhanced crawler with limited pages for testing
+                crawler = EnhancedWebCrawler(max_pages=20, delay=0.3)
                 
                 # Update progress
                 self.progress_info[project_id].update({
@@ -588,18 +684,28 @@ class WorkingCrawlerScheduler:
                             'message': f'Saved {i+1}/{len(matched_pages)} pages...'
                         })
                 
-                # Complete the job
-                crawl_job.complete_job(len(matched_pages))
+                # Complete the job ATOMICALLY - DB first, then remove from running jobs
+                completion_success = crawl_job.complete_job(len(matched_pages))
                 db.session.commit()
                 
-                # Final progress update
-                self.progress_info[project_id].update({
-                    'stage': 'completed',
-                    'progress': 100,
-                    'message': f'Crawl completed! Found {len(matched_pages)} pages.'
-                })
-                
-                print(f"Enhanced crawl job {job_id} completed for project {project_id}. Found {len(matched_pages)} matching pages")
+                if completion_success:
+                    print(f"Enhanced crawl job {job_id} completed for project {project_id}. Found {len(matched_pages)} matching pages")
+                    
+                    # Final progress update
+                    self.progress_info[project_id].update({
+                        'stage': 'completed',
+                        'progress': 100,
+                        'message': f'Crawl completed! Found {len(matched_pages)} pages.'
+                    })
+                    
+                    # CRITICAL: Remove from running jobs AFTER DB commit
+                    # This prevents race conditions where cleanup sees job not in running_jobs
+                    # but DB status hasn't been updated yet
+                    if project_id in self.running_jobs:
+                        del self.running_jobs[project_id]
+                        print(f"Removed completed job {job_id} from running jobs for project {project_id}")
+                else:
+                    print(f"Job {job_id} completion was idempotent - already completed")
                 
         except Exception as e:
             print(f"Error in enhanced crawl job {job_id} for project {project_id}: {str(e)}")
@@ -616,17 +722,14 @@ class WorkingCrawlerScheduler:
                 else:
                     db.session.rollback()
         finally:
-            # Remove from running jobs after a delay to allow final status check
-            def cleanup():
-                time.sleep(5)  # Wait 5 seconds before cleanup
-                if project_id in self.running_jobs:
-                    del self.running_jobs[project_id]
-                if project_id in self.progress_info:
-                    del self.progress_info[project_id]
+            # Clean up progress info only - running_jobs cleanup is handled in completion logic
+            if project_id in self.progress_info:
+                del self.progress_info[project_id]
             
-            cleanup_thread = threading.Thread(target=cleanup)
-            cleanup_thread.daemon = True
-            cleanup_thread.start()
+            # Ensure job is removed from running_jobs in case of failure/exception
+            if project_id in self.running_jobs:
+                del self.running_jobs[project_id]
+                print(f"Cleaned up running job {job_id} for project {project_id} (failure/exception case)")
     
     def get_job_status(self, project_id):
         """Get the status of a crawl job"""
@@ -758,6 +861,565 @@ class WorkingCrawlerScheduler:
             return True
         
         return False
+    
+    def schedule_screenshot_capture(self, project_id):
+        """Start a screenshot capture job in a background thread"""
+        if project_id in self.running_jobs:
+            return  # Job already running
+        
+        # Create crawl job record for screenshot capture
+        with self.app.app_context():
+            crawl_job = CrawlJob(project_id=project_id)
+            crawl_job.job_type = 'screenshot'  # We'll need to add this field
+            db.session.add(crawl_job)
+            db.session.commit()
+            job_id = crawl_job.id
+        
+        # Start screenshot capture in background thread
+        thread = threading.Thread(target=self._screenshot_capture_job, args=[project_id, job_id])
+        thread.daemon = True
+        thread.start()
+        
+        # Store job information with control flags
+        self.running_jobs[project_id] = {
+            'job_id': job_id,
+            'thread': thread,
+            'should_stop': False,
+            'should_pause': False,
+            'job_type': 'screenshot'
+        }
+        
+        return job_id
+    
+    def _screenshot_capture_job(self, project_id, job_id):
+        """Background job to capture screenshots for a project"""
+        crawl_job = None
+        try:
+            with self.app.app_context():
+                print(f"Starting screenshot capture job {job_id} for project {project_id}")
+                
+                # Get crawl job from database
+                crawl_job = CrawlJob.query.get(job_id)
+                if not crawl_job:
+                    print(f"Screenshot job {job_id} not found")
+                    return
+                
+                # Check for stop signal before starting
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Start the job
+                crawl_job.start_job()
+                db.session.commit()
+                
+                # Initialize progress tracking
+                self.progress_info[project_id] = {
+                    'stage': 'initializing',
+                    'progress': 0,
+                    'message': 'Initializing screenshot capture...',
+                    'job_id': job_id,
+                    'job_type': 'screenshot'
+                }
+                
+                # Get project from database
+                project = Project.query.get(project_id)
+                if not project:
+                    print(f"Project {project_id} not found")
+                    crawl_job.fail_job("Project not found")
+                    db.session.commit()
+                    return
+                
+                # Check for stop/pause signals
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Handle pause
+                while self._should_pause(project_id):
+                    with self.app.app_context():
+                        crawl_job = CrawlJob.query.get(job_id)
+                        crawl_job.pause()
+                        db.session.commit()
+                    
+                    self.progress_info[project_id].update({
+                        'stage': 'paused',
+                        'message': 'Screenshot capture paused by user'
+                    })
+                    time.sleep(1)  # Check every second
+                    
+                    if self._should_stop(project_id):
+                        with self.app.app_context():
+                            crawl_job = CrawlJob.query.get(job_id)
+                            crawl_job.fail_job("Job stopped by user")
+                            db.session.commit()
+                        return
+                
+                # Resume if was paused
+                with self.app.app_context():
+                    crawl_job = CrawlJob.query.get(job_id)
+                    if crawl_job.status == 'paused':
+                        crawl_job.start_job()
+                        db.session.commit()
+                
+                # Update progress
+                self.progress_info[project_id].update({
+                    'stage': 'capturing',
+                    'progress': 10,
+                    'message': 'Starting screenshot capture...'
+                })
+                
+                # Check for stop signal
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Initialize screenshot service
+                from screenshot.screenshot_service import ScreenshotService
+                screenshot_service = ScreenshotService()
+                
+                # Update progress
+                self.progress_info[project_id].update({
+                    'stage': 'capturing',
+                    'progress': 20,
+                    'message': 'Capturing screenshots...'
+                })
+                
+                # Check for stop signal
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Capture screenshots with job control
+                successful_count, failed_count = screenshot_service.run_capture_project_screenshots(
+                    project_id, self  # Pass scheduler instance for job control
+                )
+                
+                # Check for stop signal
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Update progress
+                total_processed = successful_count + failed_count
+                self.progress_info[project_id].update({
+                    'stage': 'completed',
+                    'progress': 100,
+                    'message': f'Screenshot capture completed! Successful: {successful_count}, Failed: {failed_count}'
+                })
+                
+                # Complete the job
+                crawl_job.complete_job(total_processed)
+                db.session.commit()
+                
+                print(f"Screenshot capture job {job_id} completed for project {project_id}. Successful: {successful_count}, Failed: {failed_count}")
+                
+        except Exception as e:
+            print(f"Error in screenshot capture job {job_id} for project {project_id}: {str(e)}")
+            self.progress_info[project_id] = {
+                'stage': 'error',
+                'progress': 0,
+                'message': f'Error: {str(e)}',
+                'job_id': job_id,
+                'job_type': 'screenshot'
+            }
+            with self.app.app_context():
+                if crawl_job:
+                    crawl_job.fail_job(str(e))
+                    db.session.commit()
+                else:
+                    db.session.rollback()
+        finally:
+            # Remove from running jobs after job completion with proper delay
+            def cleanup():
+                time.sleep(5)  # Wait 5 seconds before cleanup to avoid race conditions
+                if project_id in self.running_jobs:
+                    del self.running_jobs[project_id]
+                    print(f"Removed screenshot job {job_id} from running jobs for project {project_id}")
+                if project_id in self.progress_info:
+                    del self.progress_info[project_id]
+            
+            cleanup_thread = threading.Thread(target=cleanup)
+            cleanup_thread.daemon = True
+            cleanup_thread.start()
+    
+    def schedule_diff_generation(self, project_id):
+        """Start a diff generation job in a background thread"""
+        if project_id in self.running_jobs:
+            return  # Job already running
+        
+        # Create crawl job record for diff generation
+        with self.app.app_context():
+            crawl_job = CrawlJob(project_id=project_id)
+            crawl_job.job_type = 'diff'
+            db.session.add(crawl_job)
+            db.session.commit()
+            job_id = crawl_job.id
+        
+        # Start diff generation in background thread
+        thread = threading.Thread(target=self._diff_generation_job, args=[project_id, job_id])
+        thread.daemon = True
+        thread.start()
+        
+        # Store job information with control flags
+        self.running_jobs[project_id] = {
+            'job_id': job_id,
+            'thread': thread,
+            'should_stop': False,
+            'should_pause': False,
+            'job_type': 'diff'
+        }
+        
+        return job_id
+    
+    def _diff_generation_job(self, project_id, job_id):
+        """Background job to generate visual diffs for a project"""
+        crawl_job = None
+        try:
+            with self.app.app_context():
+                print(f"Starting diff generation job {job_id} for project {project_id}")
+                
+                # Get crawl job from database
+                crawl_job = CrawlJob.query.get(job_id)
+                if not crawl_job:
+                    print(f"Diff job {job_id} not found")
+                    return
+                
+                # Check for stop signal before starting
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Start the job
+                crawl_job.start_job()
+                db.session.commit()
+                
+                # Initialize progress tracking
+                self.progress_info[project_id] = {
+                    'stage': 'initializing',
+                    'progress': 0,
+                    'message': 'Initializing diff generation...',
+                    'job_id': job_id,
+                    'job_type': 'diff'
+                }
+                
+                # Get project from database
+                project = Project.query.get(project_id)
+                if not project:
+                    print(f"Project {project_id} not found")
+                    crawl_job.fail_job("Project not found")
+                    db.session.commit()
+                    return
+                
+                # Check for stop/pause signals
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Handle pause
+                while self._should_pause(project_id):
+                    with self.app.app_context():
+                        crawl_job = CrawlJob.query.get(job_id)
+                        crawl_job.pause()
+                        db.session.commit()
+                    
+                    self.progress_info[project_id].update({
+                        'stage': 'paused',
+                        'message': 'Diff generation paused by user'
+                    })
+                    time.sleep(1)  # Check every second
+                    
+                    if self._should_stop(project_id):
+                        with self.app.app_context():
+                            crawl_job = CrawlJob.query.get(job_id)
+                            crawl_job.fail_job("Job stopped by user")
+                            db.session.commit()
+                        return
+                
+                # Resume if was paused
+                with self.app.app_context():
+                    crawl_job = CrawlJob.query.get(job_id)
+                    if crawl_job.status == 'paused':
+                        crawl_job.start_job()
+                        db.session.commit()
+                
+                # Update progress
+                self.progress_info[project_id].update({
+                    'stage': 'processing',
+                    'progress': 10,
+                    'message': 'Starting diff generation...'
+                })
+                
+                # Check for stop signal
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Initialize diff engine
+                from diff.diff_engine import DiffEngine
+                diff_engine = DiffEngine()
+                
+                # Update progress
+                self.progress_info[project_id].update({
+                    'stage': 'processing',
+                    'progress': 20,
+                    'message': 'Generating visual diffs...'
+                })
+                
+                # Check for stop signal
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Generate diffs with job control
+                successful_count, failed_count = diff_engine.run_generate_project_diffs(
+                    project_id, self  # Pass scheduler instance for job control
+                )
+                
+                # Check for stop signal
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Update progress
+                total_processed = successful_count + failed_count
+                self.progress_info[project_id].update({
+                    'stage': 'completed',
+                    'progress': 100,
+                    'message': f'Diff generation completed! Successful: {successful_count}, Failed: {failed_count}'
+                })
+                
+                # Complete the job
+                crawl_job.complete_job(total_processed)
+                db.session.commit()
+                
+                print(f"Diff generation job {job_id} completed for project {project_id}. Successful: {successful_count}, Failed: {failed_count}")
+                
+        except Exception as e:
+            print(f"Error in diff generation job {job_id} for project {project_id}: {str(e)}")
+            self.progress_info[project_id] = {
+                'stage': 'error',
+                'progress': 0,
+                'message': f'Error: {str(e)}',
+                'job_id': job_id,
+                'job_type': 'diff'
+            }
+            with self.app.app_context():
+                if crawl_job:
+                    crawl_job.fail_job(str(e))
+                    db.session.commit()
+                else:
+                    db.session.rollback()
+        finally:
+            # Remove from running jobs after job completion with proper delay
+            def cleanup():
+                time.sleep(5)  # Wait 5 seconds before cleanup to avoid race conditions
+                if project_id in self.running_jobs:
+                    del self.running_jobs[project_id]
+                    print(f"Removed diff job {job_id} from running jobs for project {project_id}")
+                if project_id in self.progress_info:
+                    del self.progress_info[project_id]
+            
+            cleanup_thread = threading.Thread(target=cleanup)
+            cleanup_thread.daemon = True
+            cleanup_thread.start()
+    
+    def schedule_find_difference(self, project_id):
+        """Start a unified Find Difference job in a background thread"""
+        if project_id in self.running_jobs:
+            return  # Job already running
+        
+        # Create crawl job record for Find Difference
+        with self.app.app_context():
+            crawl_job = CrawlJob(project_id=project_id)
+            crawl_job.job_type = 'find_difference'
+            db.session.add(crawl_job)
+            db.session.commit()
+            job_id = crawl_job.id
+        
+        # Start Find Difference in background thread
+        thread = threading.Thread(target=self._find_difference_job, args=[project_id, job_id])
+        thread.daemon = True
+        thread.start()
+        
+        # Store job information with control flags
+        self.running_jobs[project_id] = {
+            'job_id': job_id,
+            'thread': thread,
+            'should_stop': False,
+            'should_pause': False,
+            'job_type': 'find_difference'
+        }
+        
+        return job_id
+    
+    def _find_difference_job(self, project_id, job_id):
+        """Background job to run the unified Find Difference workflow"""
+        crawl_job = None
+        try:
+            with self.app.app_context():
+                print(f"Starting Find Difference job {job_id} for project {project_id}")
+                
+                # Get crawl job from database
+                crawl_job = CrawlJob.query.get(job_id)
+                if not crawl_job:
+                    print(f"Find Difference job {job_id} not found")
+                    return
+                
+                # Check for stop signal before starting
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Start the job
+                crawl_job.start_job()
+                db.session.commit()
+                
+                # Initialize progress tracking
+                self.progress_info[project_id] = {
+                    'stage': 'initializing',
+                    'progress': 0,
+                    'message': 'Initializing Find Difference workflow...',
+                    'job_id': job_id,
+                    'job_type': 'find_difference'
+                }
+                
+                # Get project from database
+                project = Project.query.get(project_id)
+                if not project:
+                    print(f"Project {project_id} not found")
+                    crawl_job.fail_job("Project not found")
+                    db.session.commit()
+                    return
+                
+                # Check for stop/pause signals
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Handle pause
+                while self._should_pause(project_id):
+                    with self.app.app_context():
+                        crawl_job = CrawlJob.query.get(job_id)
+                        crawl_job.pause()
+                        db.session.commit()
+                    
+                    self.progress_info[project_id].update({
+                        'stage': 'paused',
+                        'message': 'Find Difference paused by user'
+                    })
+                    time.sleep(1)  # Check every second
+                    
+                    if self._should_stop(project_id):
+                        with self.app.app_context():
+                            crawl_job = CrawlJob.query.get(job_id)
+                            crawl_job.fail_job("Job stopped by user")
+                            db.session.commit()
+                        return
+                
+                # Resume if was paused
+                with self.app.app_context():
+                    crawl_job = CrawlJob.query.get(job_id)
+                    if crawl_job.status == 'paused':
+                        crawl_job.start_job()
+                        db.session.commit()
+                
+                # Update progress
+                self.progress_info[project_id].update({
+                    'stage': 'processing',
+                    'progress': 10,
+                    'message': 'Starting Find Difference workflow...'
+                })
+                
+                # Check for stop signal
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Initialize Find Difference service
+                from services.find_difference_service import FindDifferenceService
+                find_diff_service = FindDifferenceService()
+                
+                # Update progress
+                self.progress_info[project_id].update({
+                    'stage': 'processing',
+                    'progress': 20,
+                    'message': 'Capturing screenshots and generating diffs...'
+                })
+                
+                # Check for stop signal
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Run Find Difference workflow with job control
+                import asyncio
+                successful_count, failed_count, run_id = asyncio.run(
+                    find_diff_service.run_find_difference(project_id, scheduler=self)
+                )
+                
+                # Check for stop signal
+                if self._should_stop(project_id):
+                    crawl_job.fail_job("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Update progress
+                total_processed = successful_count + failed_count
+                self.progress_info[project_id].update({
+                    'stage': 'completed',
+                    'progress': 100,
+                    'message': f'Find Difference completed! Run ID: {run_id}, Successful: {successful_count}, Failed: {failed_count}'
+                })
+                
+                # Complete the job
+                crawl_job.complete_job(total_processed)
+                db.session.commit()
+                
+                print(f"Find Difference job {job_id} completed for project {project_id}. Run ID: {run_id}, Successful: {successful_count}, Failed: {failed_count}")
+                
+        except Exception as e:
+            print(f"Error in Find Difference job {job_id} for project {project_id}: {str(e)}")
+            self.progress_info[project_id] = {
+                'stage': 'error',
+                'progress': 0,
+                'message': f'Error: {str(e)}',
+                'job_id': job_id,
+                'job_type': 'find_difference'
+            }
+            with self.app.app_context():
+                if crawl_job:
+                    crawl_job.fail_job(str(e))
+                    db.session.commit()
+                else:
+                    db.session.rollback()
+        finally:
+            # Remove from running jobs after job completion with proper delay
+            def cleanup():
+                time.sleep(5)  # Wait 5 seconds before cleanup to avoid race conditions
+                if project_id in self.running_jobs:
+                    del self.running_jobs[project_id]
+                    print(f"Removed Find Difference job {job_id} from running jobs for project {project_id}")
+                if project_id in self.progress_info:
+                    del self.progress_info[project_id]
+            
+            cleanup_thread = threading.Thread(target=cleanup)
+            cleanup_thread.daemon = True
+            cleanup_thread.start()
 
 crawler_scheduler = WorkingCrawlerScheduler(app)
 

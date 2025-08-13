@@ -22,11 +22,11 @@ def test_mysql_connection():
             password=os.getenv('DB_PASSWORD'),
             charset='utf8mb4'
         )
-        print("✅ MySQL connection successful!")
+        print("[SUCCESS] MySQL connection successful!")
         connection.close()
         return True
     except Exception as e:
-        print(f"❌ MySQL connection failed: {e}")
+        print(f"[ERROR] MySQL connection failed: {e}")
         return False
 
 def create_database():
@@ -44,13 +44,13 @@ def create_database():
         
         # Create database
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
-        print(f"✅ Database '{db_name}' created successfully!")
+        print(f"[SUCCESS] Database '{db_name}' created successfully!")
         
         cursor.close()
         connection.close()
         return True
     except Exception as e:
-        print(f"❌ Database creation failed: {e}")
+        print(f"[ERROR] Database creation failed: {e}")
         return False
 
 def create_tables_and_user():
@@ -65,66 +65,66 @@ def create_tables_and_user():
         from app import app, db
         from models.user import User
         
-        print("📋 Checking database connection...")
+        print("Checking database connection...")
         
         with app.app_context():
             # Test database connection first
             try:
                 with db.engine.connect() as connection:
                     connection.execute(db.text('SELECT 1'))
-                print("✅ Database connection verified!")
+                print("[SUCCESS] Database connection verified!")
             except Exception as conn_error:
-                print(f"❌ Database connection failed: {conn_error}")
+                print(f"[ERROR] Database connection failed: {conn_error}")
                 return False
             
             # Create all tables
-            print("🔨 Creating database tables...")
+            print("Creating database tables...")
             db.create_all()
-            print("✅ Database tables created successfully!")
+            print("[SUCCESS] Database tables created successfully!")
             
             # Verify tables were created
             from sqlalchemy import inspect
             inspector = inspect(db.engine)
             tables = inspector.get_table_names()
-            print(f"📊 Created tables: {tables}")
+            print(f"Created tables: {tables}")
             
             # Check if admin user exists
             existing_user = User.query.filter_by(username='admin').first()
             if not existing_user:
                 # Create admin user
-                print("👤 Creating admin user...")
+                print("Creating admin user...")
                 admin_user = User(username='admin')
                 admin_user.set_password('admin123')
                 db.session.add(admin_user)
                 db.session.commit()
-                print("✅ Admin user created successfully!")
+                print("[SUCCESS] Admin user created successfully!")
                 print("   Username: admin")
                 print("   Password: admin123")
             else:
-                print("ℹ️  Admin user already exists")
+                print("[INFO] Admin user already exists")
             
             # Also create a demo user for consistency
             existing_demo = User.query.filter_by(username='demo').first()
             if not existing_demo:
-                print("👤 Creating demo user...")
+                print("Creating demo user...")
                 demo_user = User(username='demo')
                 demo_user.set_password('demo123')
                 db.session.add(demo_user)
                 db.session.commit()
-                print("✅ Demo user created successfully!")
+                print("[SUCCESS] Demo user created successfully!")
                 print("   Username: demo")
                 print("   Password: demo123")
             else:
-                print("ℹ️  Demo user already exists")
+                print("[INFO] Demo user already exists")
                 
         return True
     except ImportError as ie:
-        print(f"❌ Import failed: {ie}")
+        print(f"[ERROR] Import failed: {ie}")
         print("   Make sure you're running this script from the project root directory")
         print("   and all required packages are installed (pip install -r requirements.txt)")
         return False
     except Exception as e:
-        print(f"❌ Table/User creation failed: {e}")
+        print(f"[ERROR] Table/User creation failed: {e}")
         print(f"   Error details: {type(e).__name__}: {str(e)}")
         import traceback
         print("   Full traceback:")
@@ -133,12 +133,12 @@ def create_tables_and_user():
 
 def main():
     """Main setup function"""
-    print("🚀 UI Diff Dashboard - MySQL Setup")
+    print("UI Diff Dashboard - MySQL Setup")
     print("=" * 40)
     
     # Check if .env file exists
     if not os.path.exists('.env'):
-        print("❌ .env file not found!")
+        print("[ERROR] .env file not found!")
         print("Please create .env file with your MySQL credentials")
         return False
     
@@ -155,7 +155,7 @@ def main():
     # Step 1: Test MySQL connection
     print("Step 1: Testing MySQL connection...")
     if not test_mysql_connection():
-        print("\n💡 MySQL Setup Instructions:")
+        print("\nMySQL Setup Instructions:")
         print("1. Install MySQL Server from: https://dev.mysql.com/downloads/mysql/")
         print("2. Or install XAMPP from: https://www.apachefriends.org/")
         print("3. Update your .env file with correct MySQL password")
@@ -172,10 +172,10 @@ def main():
     if not create_tables_and_user():
         return False
     
-    print("\n🎉 MySQL setup completed successfully!")
-    print("\n🚀 You can now run the application with:")
+    print("\n[SUCCESS] MySQL setup completed successfully!")
+    print("\nYou can now run the application with:")
     print("   python app.py")
-    print("\n🔑 Login credentials:")
+    print("\nLogin credentials:")
     print("   Username: admin")
     print("   Password: admin123")
     
