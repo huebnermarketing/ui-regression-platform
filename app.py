@@ -51,70 +51,28 @@ from models.crawl_job import CrawlJob
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# Custom Jinja2 filters for IST datetime formatting
+# Import timestamp utilities for consistent handling
+from utils.timestamp_utils import (
+    format_ist_date, format_ist_time, format_ist_datetime,
+    format_ist_short_datetime, utc_now
+)
+
+# Custom Jinja2 filters for IST datetime formatting using timestamp utilities
 def to_ist_date(dt):
     """Convert datetime to IST and format as DD/MM/YYYY"""
-    if dt is None:
-        return 'Never'
-    
-    # Convert to IST timezone
-    ist = pytz.timezone('Asia/Kolkata')
-    if dt.tzinfo is None:
-        # Assume UTC if no timezone info
-        utc_dt = pytz.utc.localize(dt)
-    else:
-        utc_dt = dt.astimezone(pytz.utc)
-    
-    ist_dt = utc_dt.astimezone(ist)
-    return ist_dt.strftime('%d/%m/%Y')
+    return format_ist_date(dt)
 
 def to_ist_time(dt):
     """Convert datetime to IST and format as HH:MM AM/PM"""
-    if dt is None:
-        return 'Never'
-    
-    # Convert to IST timezone
-    ist = pytz.timezone('Asia/Kolkata')
-    if dt.tzinfo is None:
-        # Assume UTC if no timezone info
-        utc_dt = pytz.utc.localize(dt)
-    else:
-        utc_dt = dt.astimezone(pytz.utc)
-    
-    ist_dt = utc_dt.astimezone(ist)
-    return ist_dt.strftime('%I:%M %p')
+    return format_ist_time(dt)
 
 def to_ist_datetime(dt):
     """Convert datetime to IST and format as DD/MM/YYYY HH:MM AM/PM"""
-    if dt is None:
-        return 'Never'
-    
-    # Convert to IST timezone
-    ist = pytz.timezone('Asia/Kolkata')
-    if dt.tzinfo is None:
-        # Assume UTC if no timezone info
-        utc_dt = pytz.utc.localize(dt)
-    else:
-        utc_dt = dt.astimezone(pytz.utc)
-    
-    ist_dt = utc_dt.astimezone(ist)
-    return ist_dt.strftime('%d/%m/%Y %I:%M %p')
+    return format_ist_datetime(dt)
 
 def to_ist_short_datetime(dt):
     """Convert datetime to IST and format as DD/MM HH:MM AM/PM (short format)"""
-    if dt is None:
-        return 'Never'
-    
-    # Convert to IST timezone
-    ist = pytz.timezone('Asia/Kolkata')
-    if dt.tzinfo is None:
-        # Assume UTC if no timezone info
-        utc_dt = pytz.utc.localize(dt)
-    else:
-        utc_dt = dt.astimezone(pytz.utc)
-    
-    ist_dt = utc_dt.astimezone(ist)
-    return ist_dt.strftime('%d/%m %I:%M %p')
+    return format_ist_short_datetime(dt)
 
 # Register the filters with Jinja2
 app.jinja_env.filters['ist_date'] = to_ist_date
@@ -132,12 +90,12 @@ from typing import Set, List, Tuple
 from crawler.crawler import WebCrawler
 
 class EnhancedWebCrawler:
-    def __init__(self, max_pages=20, delay=0.3):
+    def __init__(self, max_pages=50, delay=0.3):
         """
         Enhanced web crawler with better depth coverage and external link filtering
         
         Args:
-            max_pages (int): Maximum number of pages to crawl per domain (limited to 20 for testing)
+            max_pages (int): Maximum number of pages to crawl per domain (limited to 50 for testing)
             delay (float): Delay between requests in seconds (reduced for faster crawling)
         """
         self.max_pages = max_pages
@@ -395,6 +353,109 @@ class EnhancedWebCrawler:
         print(f"Enhanced crawl completed. Found {len(discovered_urls)} URLs for {base_domain}")
         return discovered_urls
     
+    def crawl_page_restricted(self, start_url: str, scheduler=None, project_id=None) -> Set[str]:
+        """
+        Page-restricted crawling: Only crawl the specific page and its nested subpages
+        
+        Args:
+            start_url (str): Starting URL for crawling
+            scheduler: Optional scheduler instance for job control
+            project_id: Optional project ID for job control
+            
+        Returns:
+            Set[str]: Set of discovered URLs (limited to the page and its subpages)
+        """
+        parsed_start = urlparse(start_url)
+        base_domain = parsed_start.netloc
+        start_path = parsed_start.path.rstrip('/')
+        if not start_path:
+            start_path = '/'
+        
+        discovered_urls = set()
+        urls_to_crawl = {self.normalize_url(start_url)}
+        crawled_urls = set()
+        
+        print(f"Starting page-restricted crawl from: {start_url}")
+        print(f"Base path restriction: {start_path}")
+        print(f"Max pages to crawl: {self.max_pages} (limited for testing)")
+        
+        while urls_to_crawl and len(crawled_urls) < self.max_pages:
+            # Check for stop signal
+            if scheduler and project_id and scheduler._should_stop(project_id):
+                print(f"Page-restricted crawl stopped by user signal for project {project_id}")
+                break
+            
+            # Handle pause signal
+            if scheduler and project_id:
+                while scheduler._should_pause(project_id):
+                    print(f"Page-restricted crawl paused by user signal for project {project_id}")
+                    time.sleep(1)  # Check every second
+                    
+                    # Check for stop while paused
+                    if scheduler._should_stop(project_id):
+                        print(f"Page-restricted crawl stopped while paused for project {project_id}")
+                        return discovered_urls
+            
+            current_url = urls_to_crawl.pop()
+            
+            if current_url in crawled_urls:
+                continue
+                
+            crawled_urls.add(current_url)
+            discovered_urls.add(current_url)
+            
+            print(f"Page-restricted progress: {len(crawled_urls)}/{self.max_pages} pages crawled, {len(discovered_urls)} total discovered")
+            
+            # Get links from current page
+            new_links = self.get_internal_links(current_url, base_domain)
+            
+            # Filter links to only include subpages of the starting path
+            for link in new_links:
+                if link not in crawled_urls and link not in urls_to_crawl:
+                    link_path = self.extract_path(link)
+                    
+                    # Only include URLs that are subpages of the starting path
+                    if self.is_subpage_of(link_path, start_path):
+                        urls_to_crawl.add(link)
+                        print(f"Added subpage to queue: {link_path}")
+                    else:
+                        print(f"Skipped non-subpage: {link_path} (not under {start_path})")
+            
+            print(f"Page-restricted queue size: {len(urls_to_crawl)} URLs remaining to crawl")
+            
+            # Respect delay between requests
+            if self.delay > 0:
+                time.sleep(self.delay)
+        
+        print(f"Page-restricted crawl completed. Found {len(discovered_urls)} URLs under {start_path}")
+        return discovered_urls
+    
+    def is_subpage_of(self, child_path: str, parent_path: str) -> bool:
+        """
+        Check if a path is a subpage of another path
+        
+        Args:
+            child_path (str): Path to check
+            parent_path (str): Parent path to compare against
+            
+        Returns:
+            bool: True if child_path is a subpage of parent_path
+        """
+        # Normalize paths
+        child_path = child_path.rstrip('/') if child_path != '/' else '/'
+        parent_path = parent_path.rstrip('/') if parent_path != '/' else '/'
+        
+        # Root path includes everything
+        if parent_path == '/':
+            return True
+        
+        # Exact match
+        if child_path == parent_path:
+            return True
+        
+        # Check if child path starts with parent path followed by '/'
+        return child_path.startswith(parent_path + '/')
+    
     def find_matching_pages(self, staging_url: str, production_url: str, scheduler=None, project_id=None) -> List[Tuple[str, str, str, str]]:
         """
         Crawl both staging and production URLs and find matching pages with titles
@@ -410,17 +471,40 @@ class EnhancedWebCrawler:
         """
         print(f"Starting enhanced crawl comparison between staging and production")
         
-        # Crawl both domains with enhanced crawler and job control
-        print("Crawling staging environment...")
-        staging_urls = self.crawl_domain(staging_url, scheduler, project_id)
+        # Check if page-restricted crawling is enabled for this project
+        is_page_restricted = False
+        if project_id:
+            try:
+                from models.project import Project
+                project = Project.query.get(project_id)
+                if project and hasattr(project, 'is_page_restricted'):
+                    is_page_restricted = project.is_page_restricted
+                    print(f"Page-restricted crawling: {'ENABLED' if is_page_restricted else 'DISABLED'}")
+            except Exception as e:
+                print(f"Error checking page restriction setting: {e}")
         
-        # Check for stop signal after staging crawl
-        if scheduler and project_id and scheduler._should_stop(project_id):
-            print("Crawl stopped after staging environment")
-            return []
-        
-        print("Crawling production environment...")
-        production_urls = self.crawl_domain(production_url, scheduler, project_id)
+        if is_page_restricted:
+            # Page-restricted mode: Only crawl the specific provided URLs
+            print("Page-restricted mode: Only crawling provided URLs and their subpages")
+            staging_urls = self.crawl_page_restricted(staging_url, scheduler, project_id)
+            
+            # Check for stop signal after staging crawl
+            if scheduler and project_id and scheduler._should_stop(project_id):
+                print("Crawl stopped after staging environment")
+                return []
+            
+            production_urls = self.crawl_page_restricted(production_url, scheduler, project_id)
+        else:
+            # Full site mode: Crawl entire domains (existing behavior)
+            print("Full site mode: Crawling entire domains from root")
+            staging_urls = self.crawl_domain(staging_url, scheduler, project_id)
+            
+            # Check for stop signal after staging crawl
+            if scheduler and project_id and scheduler._should_stop(project_id):
+                print("Crawl stopped after staging environment")
+                return []
+            
+            production_urls = self.crawl_domain(production_url, scheduler, project_id)
         
         # Check for stop signal after production crawl
         if scheduler and project_id and scheduler._should_stop(project_id):
@@ -612,7 +696,7 @@ class WorkingCrawlerScheduler:
                     return
                 
                 # Initialize enhanced crawler with limited pages for testing
-                crawler = EnhancedWebCrawler(max_pages=20, delay=0.3)
+                crawler = EnhancedWebCrawler(max_pages=50, delay=0.3)
                 
                 # Update progress
                 self.progress_info[project_id].update({
@@ -1420,6 +1504,231 @@ class WorkingCrawlerScheduler:
             cleanup_thread = threading.Thread(target=cleanup)
             cleanup_thread.daemon = True
             cleanup_thread.start()
+    
+    def schedule_manual_page_capture(self, project_id, page_id, viewports=['desktop', 'tablet', 'mobile']):
+        """Start a manual page capture job in a background thread"""
+        # Create a unique job key for this specific page capture
+        job_key = f"{project_id}_page_{page_id}"
+        
+        if job_key in self.running_jobs:
+            return None  # Job already running for this page
+        
+        # Create crawl job record for manual page capture
+        with self.app.app_context():
+            crawl_job = CrawlJob(project_id=project_id)
+            crawl_job.job_type = 'manual_page_capture'
+            db.session.add(crawl_job)
+            db.session.commit()
+            job_id = crawl_job.id
+        
+        # Start manual page capture in background thread
+        thread = threading.Thread(target=self._manual_page_capture_job, args=[project_id, page_id, job_id, viewports])
+        thread.daemon = True
+        thread.start()
+        
+        # Store job information with control flags
+        self.running_jobs[job_key] = {
+            'job_id': job_id,
+            'thread': thread,
+            'should_stop': False,
+            'should_pause': False,
+            'job_type': 'manual_page_capture',
+            'page_id': page_id
+        }
+        
+        return job_id
+    
+    def _manual_page_capture_job(self, project_id, page_id, job_id, viewports):
+        """Background job to capture screenshots for a single page"""
+        crawl_job = None
+        job_key = f"{project_id}_page_{page_id}"
+        
+        try:
+            with self.app.app_context():
+                print(f"Starting manual page capture job {job_id} for project {project_id}, page {page_id}")
+                
+                # Get crawl job from database
+                crawl_job = CrawlJob.query.get(job_id)
+                if not crawl_job:
+                    print(f"Manual page capture job {job_id} not found")
+                    return
+                
+                # Get page from database
+                page = ProjectPage.query.get(page_id)
+                if not page or page.project_id != project_id:
+                    print(f"Page {page_id} not found or doesn't belong to project {project_id}")
+                    crawl_job.fail_job("Page not found or access denied")
+                    db.session.commit()
+                    return
+                
+                # Update page status to pending (queued is not a valid enum value)
+                page.find_diff_status = 'pending'
+                db.session.commit()
+                
+                # Check for stop signal before starting
+                if self._should_stop_job_key(job_key):
+                    crawl_job.fail_job("Job stopped by user")
+                    page.find_diff_status = 'failed'
+                    db.session.commit()
+                    return
+                
+                # Start the job
+                crawl_job.start_job()
+                db.session.commit()
+                
+                # Initialize progress tracking
+                self.progress_info[job_key] = {
+                    'stage': 'initializing',
+                    'progress': 0,
+                    'message': f'Initializing capture for {page.page_name or page.path}...',
+                    'job_id': job_id,
+                    'job_type': 'manual_page_capture',
+                    'page_id': page_id
+                }
+                
+                # Update page status to processing
+                page.find_diff_status = 'capturing'
+                db.session.commit()
+                
+                # Update progress
+                self.progress_info[job_key].update({
+                    'stage': 'capturing',
+                    'progress': 20,
+                    'message': f'Capturing screenshots for {page.page_name or page.path}...'
+                })
+                
+                # Check for stop signal
+                if self._should_stop_job_key(job_key):
+                    crawl_job.fail_job("Job stopped by user")
+                    page.find_diff_status = 'failed'
+                    db.session.commit()
+                    return
+                
+                # Initialize Find Difference service
+                from services.find_difference_service import FindDifferenceService
+                find_diff_service = FindDifferenceService()
+                
+                # Update progress
+                self.progress_info[job_key].update({
+                    'stage': 'processing',
+                    'progress': 40,
+                    'message': f'Processing screenshots and generating diffs...'
+                })
+                
+                # Check for stop signal
+                if self._should_stop_job_key(job_key):
+                    crawl_job.fail_job("Job stopped by user")
+                    page.find_diff_status = 'failed'
+                    db.session.commit()
+                    return
+                
+                # Run capture and diff for the single page
+                import asyncio
+                result = asyncio.run(find_diff_service.capture_and_diff(
+                    project_id=project_id,
+                    page_id=page_id,
+                    viewports=viewports
+                ))
+                
+                # Check for stop signal
+                if self._should_stop_job_key(job_key):
+                    crawl_job.fail_job("Job stopped by user")
+                    page.find_diff_status = 'failed'
+                    db.session.commit()
+                    return
+                
+                # Update progress based on result
+                if result['success']:
+                    self.progress_info[job_key].update({
+                        'stage': 'completed',
+                        'progress': 100,
+                        'message': f'Screenshot capture completed for {page.page_name or page.path}!'
+                    })
+                    
+                    # Update page status to completed
+                    page.find_diff_status = 'completed'
+                    page.current_run_id = result.get('run_id')
+                    page.last_run_at = db.func.now()
+                    
+                    # Complete the job
+                    crawl_job.complete_job(1)  # 1 page processed
+                    db.session.commit()
+                    
+                    print(f"Manual page capture job {job_id} completed successfully for page {page_id}")
+                else:
+                    # Update page status to failed
+                    page.find_diff_status = 'failed'
+                    db.session.commit()
+                    
+                    # Fail the job
+                    error_message = result.get('message', 'Unknown error during capture')
+                    crawl_job.fail_job(error_message)
+                    db.session.commit()
+                    
+                    self.progress_info[job_key].update({
+                        'stage': 'error',
+                        'progress': 0,
+                        'message': f'Failed to capture screenshots: {error_message}'
+                    })
+                    
+                    print(f"Manual page capture job {job_id} failed for page {page_id}: {error_message}")
+                
+        except Exception as e:
+            print(f"Error in manual page capture job {job_id} for page {page_id}: {str(e)}")
+            self.progress_info[job_key] = {
+                'stage': 'error',
+                'progress': 0,
+                'message': f'Error: {str(e)}',
+                'job_id': job_id,
+                'job_type': 'manual_page_capture',
+                'page_id': page_id
+            }
+            with self.app.app_context():
+                if crawl_job:
+                    crawl_job.fail_job(str(e))
+                    # Update page status to failed
+                    page = ProjectPage.query.get(page_id)
+                    if page:
+                        page.find_diff_status = 'failed'
+                    db.session.commit()
+                else:
+                    db.session.rollback()
+        finally:
+            # Remove from running jobs after job completion with proper delay
+            def cleanup():
+                time.sleep(3)  # Wait 3 seconds before cleanup
+                if job_key in self.running_jobs:
+                    del self.running_jobs[job_key]
+                    print(f"Removed manual page capture job {job_id} from running jobs for page {page_id}")
+                if job_key in self.progress_info:
+                    del self.progress_info[job_key]
+            
+            cleanup_thread = threading.Thread(target=cleanup)
+            cleanup_thread.daemon = True
+            cleanup_thread.start()
+    
+    def _should_stop_job_key(self, job_key):
+        """Check if job should be stopped by job key"""
+        if job_key not in self.running_jobs:
+            return False
+        return self.running_jobs[job_key].get('should_stop', False)
+    
+    def get_page_job_status(self, project_id, page_id):
+        """Get the status of a manual page capture job"""
+        job_key = f"{project_id}_page_{page_id}"
+        if job_key in self.running_jobs:
+            return {'status': 'scheduled', 'job_key': job_key}
+        else:
+            return {'status': 'not_scheduled', 'job_key': job_key}
+    
+    def get_page_progress_info(self, project_id, page_id):
+        """Get progress information for a manual page capture job"""
+        job_key = f"{project_id}_page_{page_id}"
+        return self.progress_info.get(job_key, {
+            'stage': 'unknown',
+            'progress': 0,
+            'message': 'No progress information available'
+        })
 
 crawler_scheduler = WorkingCrawlerScheduler(app)
 
@@ -1427,10 +1736,18 @@ crawler_scheduler = WorkingCrawlerScheduler(app)
 from auth.routes import register_routes
 from projects.routes import register_project_routes
 from crawl_queue.routes import register_crawl_queue_routes
+from history.routes import register_history_routes
+from routes.asset_resolver import register_asset_resolver_routes
+from routes.run_state_routes import register_run_state_routes
+from settings.routes import settings_bp
 
 register_routes(app)
 register_project_routes(app, crawler_scheduler)
 register_crawl_queue_routes(app, crawler_scheduler)
+register_history_routes(app)
+register_asset_resolver_routes(app)
+register_run_state_routes(app, crawler_scheduler)
+app.register_blueprint(settings_bp)
 
 @app.route('/')
 def index():

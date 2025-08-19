@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - PixelPulse</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Modern Color Palette */
+        :root {
+            --primary-text: #0F172A;
+            --accent-color: #3b82f6;
+            --background: #FEFEFE;
+            --subtle-text: #8E9093;
+            --sidebar-bg: #0F172A;
+            --border-color: #BFCDD6;
+            --card-bg: #f5f7fa;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #3b82f6;
+            --card-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.1), 0 2px 4px -1px rgba(15, 23, 42, 0.06);
+            --card-shadow-hover: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -2px rgba(15, 23, 42, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--background);
+            color: var(--primary-text);
+            overflow-x: hidden;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid rgba(191, 205, 214, 0.2);
+            z-index: 1000;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(191, 205, 214, 0.2);
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: #FEFEFE;
+        }
+
+        .sidebar-logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-color);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.25rem;
+        }
+
+        .sidebar-logo-text {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #FEFEFE;
+        }
+
+        .sidebar-user {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid rgba(191, 205, 214, 0.2);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .user-details h6 {
+            margin: 0;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #FEFEFE;
+        }
+
+        .user-details p {
+            margin: 0;
+            font-size: 0.75rem;
+            color: #8E9093;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            margin: 0.25rem 1rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: #BFCDD6;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: rgba(59, 130, 246, 0.1);
+            color: #FEFEFE;
+        }
+
+        .nav-link.active {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .nav-link i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            min-height: 100vh;
+            background: var(--card-bg);
+        }
+
+        /* Top Bar */
+        .top-bar {
+            background: var(--background);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .page-header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+            color: var(--primary-text);
+        }
+
+        .page-header p {
+            margin: 0;
+            color: var(--subtle-text);
+            font-size: 0.875rem;
+        }
+
+        /* Content Area */
+        .content-area {
+            padding: 2rem;
+        }
+
+        /* Settings Cards */
+        .settings-card {
+            background: var(--background);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+
+        .settings-card-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--card-bg);
+        }
+
+        .settings-card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+            color: var(--primary-text);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .settings-card-body {
+            padding: 1.5rem;
+        }
+
+        /* Buttons */
+        .btn-action {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.25rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+
+        .btn-action:hover {
+            background: #2563eb;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--primary-text);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+            color: var(--primary-text);
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-item {
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-text);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--subtle-text);
+        }
+
+        /* Cleanup Section */
+        .cleanup-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .cleanup-warning h6 {
+            color: var(--warning-color);
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .cleanup-warning p {
+            color: var(--primary-text);
+            margin: 0;
+            font-size: 0.875rem;
+        }
+
+        /* Loading and Status */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 1rem;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid var(--border-color);
+            border-top: 3px solid var(--accent-color);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .top-bar {
+                padding: 1rem;
+            }
+
+            .content-area {
+                padding: 1rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            color: var(--primary-text);
+            padding: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-menu-btn {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <div class="sidebar" id="sidebar">
+        <!-- Sidebar Header -->
+        <div class="sidebar-header">
+            <a href="{{ url_for('dashboard') }}" class="sidebar-logo">
+                <div class="sidebar-logo-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="sidebar-logo-text">PixelPulse</div>
+            </a>
+        </div>
+
+        <!-- User Profile -->
+        <div class="sidebar-user">
+            <div class="user-info">
+                <div class="user-avatar">
+                    {{ user.username[0].upper() }}
+                </div>
+                <div class="user-details">
+                    <h6>{{ user.username }}</h6>
+                    <p>Administrator</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Menu -->
+        <nav class="sidebar-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">
+                    <i class="fas fa-home"></i>
+                    <span>Dashboard</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('projects_list') }}" class="nav-link">
+                    <i class="fas fa-folder"></i>
+                    <span>Projects</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('crawl_queue') }}" class="nav-link">
+                    <i class="fas fa-list-ul"></i>
+                    <span>Crawl Queue</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="showComingSoon('Analytics')">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Analytics</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="showComingSoon('Alerts')">
+                    <i class="fas fa-bell"></i>
+                    <span>Alerts</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="showComingSoon('Reports')">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Reports</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="showComingSoon('API Access')">
+                    <i class="fas fa-code"></i>
+                    <span>API Access</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('settings.settings_page') }}" class="nav-link active">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="page-header">
+                <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h1>Settings</h1>
+                <p>Manage your account and application settings</p>
+            </div>
+            <div>
+                <a href="{{ url_for('logout') }}" class="btn-action btn-secondary">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </a>
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content-area">
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else 'success' if category == 'success' else 'info' }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Account Information -->
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <h2 class="settings-card-title">
+                        <i class="fas fa-user"></i>
+                        Account Information
+                    </h2>
+                </div>
+                <div class="settings-card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Username:</strong> {{ user.username }}</p>
+                            <p><strong>Account Created:</strong> {{ user.created_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="stats-grid">
+                                <div class="stat-item">
+                                    <div class="stat-value">{{ stats.projects }}</div>
+                                    <div class="stat-label">Projects</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value">{{ stats.pages }}</div>
+                                    <div class="stat-label">Pages</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value">{{ stats.jobs }}</div>
+                                    <div class="stat-label">Jobs</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Management -->
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <h2 class="settings-card-title">
+                        <i class="fas fa-database"></i>
+                        Data Management
+                    </h2>
+                </div>
+                <div class="settings-card-body">
+                    <div class="cleanup-warning">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Data Cleanup</h6>
+                        <p>This will permanently delete ALL your test data including projects, pages, screenshots, and job history. Your account will remain intact.</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h5>Clean Up All Data</h5>
+                            <p class="text-muted">Remove all projects, pages, screenshots, and related files to start fresh. This action cannot be undone.</p>
+                            
+                            <div id="cleanupPreview" style="display: none;">
+                                <h6>What will be deleted:</h6>
+                                <ul id="previewList"></ul>
+                            </div>
+
+                            <div id="cleanupLoading" class="loading">
+                                <div class="spinner"></div>
+                                <p>Processing cleanup...</p>
+                            </div>
+
+                            <div id="cleanupResult" style="display: none;"></div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button id="previewBtn" class="btn-action btn-secondary mb-2" onclick="previewCleanup()">
+                                <i class="fas fa-eye"></i>
+                                Preview Cleanup
+                            </button>
+                            <br>
+                            <button id="cleanupBtn" class="btn-action btn-danger" onclick="executeCleanup()" disabled>
+                                <i class="fas fa-trash"></i>
+                                Clean Up All Data
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal fade" id="confirmCleanupModal" tabindex="-1" aria-labelledby="confirmCleanupModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmCleanupModalLabel">
+                        <i class="fas fa-exclamation-triangle text-danger me-2"></i>
+                        Confirm Data Cleanup
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger">
+                        <strong>WARNING:</strong> This action cannot be undone!
+                    </div>
+                    <p>You are about to permanently delete:</p>
+                    <ul id="confirmationList"></ul>
+                    <p><strong>Your account will remain intact</strong> - only your data will be deleted.</p>
+                    <p>Type <strong>DELETE</strong> to confirm:</p>
+                    <input type="text" id="confirmationInput" class="form-control" placeholder="Type DELETE to confirm">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="confirmDeleteBtn" class="btn btn-danger" onclick="confirmCleanup()" disabled>
+                        <i class="fas fa-trash me-2"></i>
+                        Delete All Data
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let previewData = null;
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        function showComingSoon(featureName) {
+            alert(featureName + ' functionality is coming soon!');
+        }
+
+        async function previewCleanup() {
+            const previewBtn = document.getElementById('previewBtn');
+            const cleanupBtn = document.getElementById('cleanupBtn');
+            const previewDiv = document.getElementById('cleanupPreview');
+            const previewList = document.getElementById('previewList');
+
+            previewBtn.disabled = true;
+            previewBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+
+            try {
+                const response = await fetch('/settings/cleanup/preview');
+                const data = await response.json();
+
+                if (data.success) {
+                    previewData = data;
+                    
+                    // Show preview
+                    previewList.innerHTML = `
+                        <li><strong>${data.database.projects}</strong> projects</li>
+                        <li><strong>${data.database.pages}</strong> project pages</li>
+                        <li><strong>${data.database.jobs}</strong> crawl jobs</li>
+                        <li><strong>${data.filesystem.total_files}</strong> files</li>
+                        <li><strong>${data.filesystem.total_directories}</strong> directories</li>
+                    `;
+                    
+                    previewDiv.style.display = 'block';
+                    cleanupBtn.disabled = false;
+                } else {
+                    alert('Error loading preview: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error loading preview: ' + error.message);
+            } finally {
+                previewBtn.disabled = false;
+                previewBtn.innerHTML = '<i class="fas fa-eye"></i> Preview Cleanup';
+            }
+        }
+
+        function executeCleanup() {
+            if (!previewData) {
+                alert('Please preview cleanup first');
+                return;
+            }
+
+            // Populate confirmation modal
+            const confirmationList = document.getElementById('confirmationList');
+            confirmationList.innerHTML = `
+                <li><strong>${previewData.database.projects}</strong> projects</li>
+                <li><strong>${previewData.database.pages}</strong> project pages</li>
+                <li><strong>${previewData.database.jobs}</strong> crawl jobs</li>
+                <li><strong>${previewData.filesystem.total_files}</strong> files</li>
+                <li><strong>${previewData.filesystem.total_directories}</strong> directories</li>
+            `;
+
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('confirmCleanupModal'));
+            modal.show();
+        }
+
+        function confirmCleanup() {
+            const input = document.getElementById('confirmationInput');
+            if (input.value !== 'DELETE') {
+                alert('Please type DELETE to confirm');
+                return;
+            }
+
+            // Hide modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('confirmCleanupModal'));
+            modal.hide();
+
+            // Show loading
+            const loadingDiv = document.getElementById('cleanupLoading');
+            const resultDiv = document.getElementById('cleanupResult');
+            const cleanupBtn = document.getElementById('cleanupBtn');
+
+            loadingDiv.classList.add('show');
+            cleanupBtn.disabled = true;
+            resultDiv.style.display = 'none';
+
+            // Execute cleanup
+            fetch('/settings/cleanup/execute', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ confirmed: true })
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingDiv.classList.remove('show');
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <h6><i class="fas fa-check-circle"></i> Cleanup Completed Successfully!</h6>
+                            <p>${data.message}</p>
+                        </div>
+                    `;
+                    
+                    // Reset preview
+                    document.getElementById('cleanupPreview').style.display = 'none';
+                    cleanupBtn.disabled = true;
+                    previewData = null;
+                    
+                    // Refresh page after 3 seconds
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h6><i class="fas fa-exclamation-triangle"></i> Cleanup Failed</h6>
+                            <p>${data.error}</p>
+                        </div>
+                    `;
+                    cleanupBtn.disabled = false;
+                }
+                
+                resultDiv.style.display = 'block';
+            })
+            .catch(error => {
+                loadingDiv.classList.remove('show');
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Error</h6>
+                        <p>An unexpected error occurred: ${error.message}</p>
+                    </div>
+                `;
+                resultDiv.style.display = 'block';
+                cleanupBtn.disabled = false;
+            });
+        }
+
+        // Enable/disable confirm button based on input
+        document.getElementById('confirmationInput').addEventListener('input', function() {
+            const confirmBtn = document.getElementById('confirmDeleteBtn');
+            confirmBtn.disabled = this.value !== 'DELETE';
+        });
+
+        // Reset modal when closed
+        document.getElementById('confirmCleanupModal').addEventListener('hidden.bs.modal', function() {
+            document.getElementById('confirmationInput').value = '';
+            document.getElementById('confirmDeleteBtn').disabled = true;
+        });
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const menuBtn = document.querySelector('.mobile-menu-btn');
+            
+            if (window.innerWidth <= 768 && 
+                !sidebar.contains(event.target) && 
+                !menuBtn.contains(event.target) &&
+                sidebar.classList.contains('open')) {
+                sidebar.classList.remove('open');
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const sidebar = document.getElementById('sidebar');
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('open');
+            }
+        });
+    </script>
+</body>
+</html>

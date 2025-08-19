@@ -6,42 +6,45 @@ from urllib.parse import urlparse
 import re
 import os
 from pathlib import Path
+from datetime import datetime
+from utils.timestamp_utils import format_jobs_history_datetime
 
 def register_project_routes(app, crawler_scheduler):
     @app.route('/projects')
     @login_required
     def projects_list():
-        """List all projects for the current user with job status"""
+        """List all projects for the current user with unified pipeline status"""
         projects = Project.query.filter_by(user_id=current_user.id).order_by(Project.created_at.desc()).all()
         
-        # Get job status for each project
-        from models.crawl_job import CrawlJob
+        # Initialize run state service
+        from services.run_state_service import RunStateService
+        run_state_service = RunStateService(crawler_scheduler)
+        
+        # Get run states for all projects
+        project_ids = [p.id for p in projects]
+        run_states = run_state_service.get_multiple_projects_run_state(project_ids) if project_ids else {}
+        
+        # Build projects with unified status
         projects_with_status = []
         
         for project in projects:
-            # Get scheduler status
-            scheduler_status = crawler_scheduler.get_job_status(project.id)
-            
-            # Get the latest CrawlJob from database for accurate status
-            latest_job = CrawlJob.query.filter_by(project_id=project.id).order_by(CrawlJob.created_at.desc()).first()
-            
-            # Determine the actual job status by combining scheduler and database info
-            if scheduler_status.get('status') == 'scheduled':
-                # Job is actively running in scheduler
-                job_status = {'status': 'scheduled', 'db_status': latest_job.status if latest_job else None}
-            elif latest_job:
-                # Use database status when not actively scheduled
-                job_status = {'status': latest_job.status, 'db_status': latest_job.status}
-            else:
-                # No job found
-                job_status = {'status': 'not_scheduled', 'db_status': None}
+            # Get unified run state
+            run_state = run_states.get(project.id, {
+                'state': 'not_started',
+                'progress': 0,
+                'message': 'No runs yet',
+                'has_failures': False,
+                'failure_reason': None,
+                'run_id': None,
+                'last_updated': None
+            })
             
             # Get page count
             page_count = ProjectPage.query.filter_by(project_id=project.id).count()
             
             projects_with_status.append({
                 'project': project,
-                'job_status': job_status,
+                'run_state': run_state,
                 'page_count': page_count
             })
         
@@ -55,6 +58,7 @@ def register_project_routes(app, crawler_scheduler):
             name = request.form.get('name', '').strip()
             staging_url = request.form.get('staging_url', '').strip()
             production_url = request.form.get('production_url', '').strip()
+            is_page_restricted = bool(request.form.get('is_page_restricted'))
             
             # Validation
             if not name:
@@ -90,7 +94,8 @@ def register_project_routes(app, crawler_scheduler):
                     name=name,
                     staging_url=staging_url,
                     production_url=production_url,
-                    user_id=current_user.id
+                    user_id=current_user.id,
+                    is_page_restricted=is_page_restricted
                 )
                 db.session.add(project)
                 db.session.commit()
@@ -151,23 +156,10 @@ def register_project_routes(app, crawler_scheduler):
         
         pages = pagination.items
         
-        # Get enhanced job status (combining scheduler and database info)
-        scheduler_status = crawler_scheduler.get_job_status(project_id)
-        
-        # Get the latest CrawlJob from database for accurate status
-        from models.crawl_job import CrawlJob
-        latest_job = CrawlJob.query.filter_by(project_id=project_id).order_by(CrawlJob.created_at.desc()).first()
-        
-        # Determine the actual job status by combining scheduler and database info
-        if scheduler_status.get('status') == 'scheduled':
-            # Job is actively running in scheduler
-            job_status = {'status': 'scheduled', 'db_status': latest_job.status if latest_job else None}
-        elif latest_job:
-            # Use database status when not actively scheduled
-            job_status = {'status': latest_job.status, 'db_status': latest_job.status}
-        else:
-            # No job found
-            job_status = {'status': 'not_scheduled', 'db_status': None}
+        # Get unified run state
+        from services.run_state_service import RunStateService
+        run_state_service = RunStateService(crawler_scheduler)
+        run_state = run_state_service.get_project_run_state(project_id)
         
         # Get available statuses for filter dropdown
         available_statuses = db.session.query(ProjectPage.status).filter_by(project_id=project_id).distinct().all()
@@ -177,7 +169,7 @@ def register_project_routes(app, crawler_scheduler):
                              project=project,
                              pages=pages,
                              pagination=pagination,
-                             job_status=job_status,
+                             run_state=run_state,
                              search_query=search_query,
                              status_filter=status_filter,
                              available_statuses=available_statuses,
@@ -206,41 +198,27 @@ def register_project_routes(app, crawler_scheduler):
     @app.route('/projects/<int:project_id>/status')
     @login_required
     def crawl_status(project_id):
-        """Get crawl status for a project with progress information (AJAX endpoint)"""
+        """Get unified pipeline status for a project (AJAX endpoint)"""
         project = Project.query.filter_by(
             id=project_id,
             user_id=current_user.id
         ).first_or_404()
         
-        # Get scheduler status
-        scheduler_status = crawler_scheduler.get_job_status(project_id)
+        # Get unified run state
+        from services.run_state_service import RunStateService
+        run_state_service = RunStateService(crawler_scheduler)
+        run_state = run_state_service.get_project_run_state(project_id)
+        
+        # Get page count
         page_count = ProjectPage.query.filter_by(project_id=project_id).count()
         
-        # Get the latest CrawlJob from database for accurate status
+        # Get the latest CrawlJob from database for backward compatibility
         from models.crawl_job import CrawlJob
         latest_job = CrawlJob.query.filter_by(project_id=project_id).order_by(CrawlJob.created_at.desc()).first()
         
-        # Determine the actual job status by combining scheduler and database info
-        if scheduler_status.get('status') == 'scheduled':
-            # Job is actively running in scheduler
-            job_status = {'status': 'scheduled', 'db_status': latest_job.status if latest_job else None}
-        elif latest_job:
-            # Use database status when not actively scheduled
-            job_status = {'status': latest_job.status, 'db_status': latest_job.status}
-        else:
-            # No job found
-            job_status = {'status': 'not_scheduled', 'db_status': None}
-        
-        # Get progress information if crawling
-        progress_info = {}
-        if scheduler_status.get('status') == 'scheduled':
-            # Get additional progress details from crawler if available
-            progress_info = crawler_scheduler.get_progress_info(project_id)
-        
         return jsonify({
-            'job_status': job_status,
+            'run_state': run_state,
             'page_count': page_count,
-            'progress': progress_info,
             'latest_job': {
                 'id': latest_job.id if latest_job else None,
                 'status': latest_job.status if latest_job else None,
@@ -469,7 +447,7 @@ def register_project_routes(app, crawler_scheduler):
     @app.route('/projects/<int:project_id>/manual-capture/<int:page_id>', methods=['POST'])
     @login_required
     def manual_capture_page(project_id, page_id):
-        """Enhanced Manual Capture: Capture screenshots AND generate diff image in one operation"""
+        """Asynchronous Manual Capture: Queue screenshot capture job for background processing"""
         try:
             # Verify project access first
             project = Project.query.filter_by(
@@ -495,6 +473,14 @@ def register_project_routes(app, crawler_scheduler):
                     'message': 'Page not found'
                 }), 404
             
+            # Check if a job is already running for this page
+            job_status = crawler_scheduler.get_page_job_status(project_id, page_id)
+            if job_status['status'] == 'scheduled':
+                return jsonify({
+                    'success': False,
+                    'message': 'A capture job is already running for this page. Please wait for it to complete.'
+                }), 409
+            
             # Get request parameters with proper error handling
             try:
                 request_data = request.get_json() or {}
@@ -507,72 +493,104 @@ def register_project_routes(app, crawler_scheduler):
             
             viewports = request_data.get('viewports', ['desktop', 'tablet', 'mobile'])
             
-            # Import Find Difference service with error handling
+            # Schedule the background job
             try:
-                from services.find_difference_service import FindDifferenceService
-                find_diff_service = FindDifferenceService()
-            except ImportError as import_error:
-                app.logger.error(f"Import error for FindDifferenceService: {str(import_error)}")
-                return jsonify({
-                    'success': False,
-                    'message': 'Service initialization failed'
-                }), 500
-            
-            # Run enhanced capture+diff (screenshots + diff generation) with error handling
-            try:
-                import asyncio
-                result = asyncio.run(find_diff_service.capture_and_diff(
+                job_id = crawler_scheduler.schedule_manual_page_capture(
                     project_id=project_id,
                     page_id=page_id,
                     viewports=viewports
-                ))
-            except Exception as capture_error:
-                app.logger.error(f"Enhanced capture+diff execution error: {str(capture_error)}")
-                return jsonify({
-                    'success': False,
-                    'message': f"Enhanced capture+diff failed: {str(capture_error)}"
-                }), 500
-            
-            if result['success']:
-                # Safely determine viewport count
-                if isinstance(viewports, list):
-                    viewport_count = len(viewports)
-                elif isinstance(viewports, str):
-                    viewport_count = 1
-                else:
-                    viewport_count = 3  # Default fallback
+                )
                 
-                # Count successful diffs
-                diff_paths = result.get('diff_paths_by_viewport', {})
-                successful_diffs = len([v for v in diff_paths.values() if v.get('status') == 'completed'])
+                if job_id is None:
+                    return jsonify({
+                        'success': False,
+                        'message': 'Failed to schedule capture job. A job may already be running.'
+                    }), 409
+                
+                # Clean up page name for display
+                display_name = (page.page_name or page.path or 'Unknown Page').strip()
+                if not display_name or display_name.isspace():
+                    display_name = page.path or f"Page {page_id}"
                 
                 return jsonify({
                     'success': True,
-                    'message': f"Enhanced capture+diff completed for '{page.page_name or page.path}' across {viewport_count} viewports. Generated {successful_diffs} diff images.",
-                    'run_id': result['run_id'],
+                    'message': f"Screenshot capture job queued for '{display_name}'. Processing in background...",
+                    'job_id': job_id,
                     'page_id': page_id,
-                    'updated_status': result['updated_status'],
-                    'screenshot_paths_by_viewport': result.get('screenshot_paths_by_viewport', {}),
-                    'diff_paths_by_viewport': diff_paths
+                    'updated_status': 'pending'
                 })
-            else:
+                
+            except Exception as schedule_error:
+                app.logger.error(f"Error scheduling capture job for page {page_id}: {str(schedule_error)}")
                 return jsonify({
                     'success': False,
-                    'message': result.get('message', f"Failed to complete enhanced capture+diff for '{page.page_name or page.path}'"),
-                    'error': result.get('error', 'Unknown error')
-                })
+                    'message': f"Failed to schedule capture job: {str(schedule_error)}"
+                }), 500
             
         except Exception as e:
-            app.logger.error(f"Unexpected error in enhanced capture+diff for page {page_id}: {str(e)}")
+            app.logger.error(f"Unexpected error in manual capture for page {page_id}: {str(e)}")
             return jsonify({
                 'success': False,
-                'message': f"Error in enhanced capture+diff: {str(e)}"
+                'message': f"Error in manual capture: {str(e)}"
+            }), 500
+    
+    @app.route('/projects/<int:project_id>/manual-capture/<int:page_id>/status')
+    @login_required
+    def manual_capture_status(project_id, page_id):
+        """Get status of manual page capture job (AJAX endpoint)"""
+        try:
+            # Verify project access
+            project = Project.query.filter_by(
+                id=project_id,
+                user_id=current_user.id
+            ).first()
+            
+            if not project:
+                return jsonify({
+                    'success': False,
+                    'message': 'Project not found or access denied'
+                }), 404
+            
+            # Verify page belongs to this project
+            page = ProjectPage.query.filter_by(
+                id=page_id,
+                project_id=project_id
+            ).first()
+            
+            if not page:
+                return jsonify({
+                    'success': False,
+                    'message': 'Page not found'
+                }), 404
+            
+            # Get job status from scheduler
+            job_status = crawler_scheduler.get_page_job_status(project_id, page_id)
+            progress_info = crawler_scheduler.get_page_progress_info(project_id, page_id)
+            
+            # Get current page status from database
+            db.session.refresh(page)  # Refresh to get latest status
+            
+            return jsonify({
+                'success': True,
+                'job_status': job_status,
+                'progress': progress_info,
+                'page_status': page.find_diff_status,
+                'current_run_id': page.current_run_id,
+                'last_run_at': page.last_run_at.isoformat() if page.last_run_at else None,
+                'page_id': page_id
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Error getting manual capture status for page {page_id}: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f"Error getting status: {str(e)}"
             }), 500
     
     @app.route('/runs/<path:filename>')
     @login_required
     def serve_run_file(filename):
-        """Serve files from timestamped runs (screenshots and diffs)"""
+        """Serve files from timestamped runs (screenshots and diffs) - Universal Dynamic Handler"""
         try:
             # Normalize the filename by replacing backslashes with forward slashes
             normalized_filename = filename.replace('\\', '/')
@@ -593,25 +611,121 @@ def register_project_routes(app, crawler_scheduler):
             if not project:
                 return "Access denied", 403
             
-            # Construct file path - use os.path.join for proper OS path handling
-            runs_dir = "runs"
-            file_path = os.path.join(runs_dir, *path_parts)
+            # Universal file resolution strategy
+            file_path_obj = None
+            attempted_paths = []
             
-            # Convert to Path object for existence check
-            file_path_obj = Path(file_path)
+            # Strategy 1: Try the exact path in runs directory (new structure)
+            runs_path = os.path.join("runs", *path_parts)
+            file_path_obj = Path(runs_path)
+            attempted_paths.append(str(file_path_obj))
             
             if not file_path_obj.exists():
-                app.logger.error(f"Run file not found: {file_path}")
+                # Strategy 2: Try screenshots directory with intelligent path conversion
+                project_id_str = path_parts[0]
+                run_id = path_parts[1]
+                
+                # Handle different URL patterns dynamically
+                remaining_parts = path_parts[2:]
+                
+                # Case conversion mapping for viewports
+                viewport_map = {
+                    'mobile': 'Mobile',
+                    'tablet': 'Tablet',
+                    'desktop': 'Desktop'
+                }
+                
+                # Pattern 1: /runs/project/run/diffs/viewport/filename
+                if len(remaining_parts) >= 3 and remaining_parts[0] == 'diffs':
+                    viewport = remaining_parts[1]
+                    filename_part = remaining_parts[2]
+                    
+                    # Convert viewport case
+                    viewport_proper = viewport_map.get(viewport.lower(), viewport.capitalize())
+                    
+                    # Convert filename patterns
+                    filename_converted = filename_part
+                    if '_diff.png' in filename_part:
+                        filename_converted = filename_part.replace('_diff.png', '-diff.png')
+                    elif '_diff.jpg' in filename_part:
+                        filename_converted = filename_part.replace('_diff.jpg', '-diff.jpg')
+                    
+                    screenshots_path = os.path.join('screenshots', project_id_str, run_id, viewport_proper, filename_converted)
+                    file_path_obj = Path(screenshots_path)
+                    attempted_paths.append(str(file_path_obj))
+                
+                # Pattern 2: /runs/project/run/viewport/filename (direct screenshots)
+                elif len(remaining_parts) >= 2:
+                    viewport = remaining_parts[0]
+                    filename_part = remaining_parts[1]
+                    
+                    # Convert viewport case
+                    viewport_proper = viewport_map.get(viewport.lower(), viewport.capitalize())
+                    
+                    # Try different filename patterns
+                    filename_variations = [
+                        filename_part,  # Original
+                        filename_part.replace('_', '-'),  # underscore to dash
+                        filename_part.replace('-', '_'),  # dash to underscore
+                    ]
+                    
+                    for filename_var in filename_variations:
+                        screenshots_path = os.path.join('screenshots', project_id_str, run_id, viewport_proper, filename_var)
+                        test_path = Path(screenshots_path)
+                        attempted_paths.append(str(test_path))
+                        if test_path.exists():
+                            file_path_obj = test_path
+                            break
+                
+                # Pattern 3: Try all possible combinations if above patterns fail
+                if not file_path_obj or not file_path_obj.exists():
+                    # Get all possible viewport directories
+                    screenshots_base = Path('screenshots') / project_id_str / run_id
+                    if screenshots_base.exists():
+                        for viewport_dir in screenshots_base.iterdir():
+                            if viewport_dir.is_dir():
+                                # Try to find any file that matches the requested filename pattern
+                                target_filename = remaining_parts[-1] if remaining_parts else ''
+                                
+                                # Generate filename variations
+                                filename_variations = [
+                                    target_filename,
+                                    target_filename.replace('_', '-'),
+                                    target_filename.replace('-', '_'),
+                                    target_filename.replace('_diff.', '-diff.'),
+                                    target_filename.replace('-diff.', '_diff.'),
+                                ]
+                                
+                                for filename_var in filename_variations:
+                                    test_file = viewport_dir / filename_var
+                                    attempted_paths.append(str(test_file))
+                                    if test_file.exists():
+                                        file_path_obj = test_file
+                                        break
+                                
+                                if file_path_obj and file_path_obj.exists():
+                                    break
+            
+            # Final check - if still not found, log all attempted paths
+            if not file_path_obj or not file_path_obj.exists():
+                app.logger.error(f"File not found. Original request: {filename}")
+                app.logger.error(f"Attempted paths: {attempted_paths}")
                 return "File not found", 404
             
             # Determine MIME type based on file extension
-            if file_path.lower().endswith('.png'):
+            file_ext = str(file_path_obj).lower()
+            if file_ext.endswith('.png'):
                 mimetype = 'image/png'
-            elif file_path.lower().endswith('.jpg') or file_path.lower().endswith('.jpeg'):
+            elif file_ext.endswith(('.jpg', '.jpeg')):
                 mimetype = 'image/jpeg'
+            elif file_ext.endswith('.gif'):
+                mimetype = 'image/gif'
+            elif file_ext.endswith('.webp'):
+                mimetype = 'image/webp'
             else:
                 mimetype = 'application/octet-stream'
             
+            app.logger.info(f"Serving file: {file_path_obj} for request: {filename}")
             return send_file(str(file_path_obj), mimetype=mimetype)
             
         except (ValueError, IndexError):
@@ -705,6 +819,194 @@ def register_project_routes(app, crawler_scheduler):
         except Exception as e:
             app.logger.error(f"Error serving screenshot {filename}: {str(e)}")
             return "Error serving screenshot", 500
+    
+    # Jobs History API Endpoints
+    @app.route('/api/projects/<int:project_id>/jobs')
+    @login_required
+    def get_jobs_history(project_id):
+        """Get jobs history for a project"""
+        try:
+            # Verify project access
+            project = Project.query.filter_by(
+                id=project_id,
+                user_id=current_user.id
+            ).first()
+            
+            if not project:
+                return jsonify({
+                    'success': False,
+                    'error': 'Project not found or access denied'
+                }), 404
+            
+            # Get jobs from CrawlJob table
+            from models.crawl_job import CrawlJob
+            jobs = CrawlJob.query.filter_by(project_id=project_id).order_by(CrawlJob.job_number.desc()).all()
+            
+            # Convert jobs to the format expected by frontend
+            jobs_data = []
+            for job in jobs:
+                # Format updated_at in IST timezone: MMM DD, YYYY, hh:mm AM/PM
+                updated_at_formatted = format_jobs_history_datetime(job.updated_at)
+                
+                jobs_data.append({
+                    'id': job.id,
+                    'job_number': job.job_number,
+                    'status': job.status,
+                    'updated_at': updated_at_formatted,
+                    'duration': job.duration_formatted,
+                    'pages': job.total_pages,
+                    'startTime': job.created_at.isoformat() if job.created_at else None,
+                    'endTime': job.completed_at.isoformat() if job.completed_at else None
+                })
+            
+            return jsonify({
+                'success': True,
+                'jobs': jobs_data
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Error getting jobs history for project {project_id}: {str(e)}")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to load jobs history'
+            }), 500
+    
+    @app.route('/api/projects/<int:project_id>/start-crawl-job', methods=['POST'])
+    @login_required
+    def start_crawl_job(project_id):
+        """Start a new crawling job with job tracking"""
+        try:
+            # Verify project access
+            project = Project.query.filter_by(
+                id=project_id,
+                user_id=current_user.id
+            ).first()
+            
+            if not project:
+                return jsonify({
+                    'success': False,
+                    'message': 'Project not found or access denied'
+                }), 404
+            
+            # Check if there's already an active job (Crawling or pending status) for this project
+            from models.crawl_job import CrawlJob
+            running_job = CrawlJob.query.filter_by(
+                project_id=project_id
+            ).filter(CrawlJob.status.in_(['Crawling', 'pending'])).first()
+            
+            if running_job:
+                return jsonify({
+                    'success': False,
+                    'message': 'A crawling job is already running for this project'
+                }), 409
+            
+            # Check if there's an existing job that can be reused (completed or failed)
+            existing_job = CrawlJob.query.filter_by(
+                project_id=project_id
+            ).filter(CrawlJob.status.in_(['Crawled', 'Job Failed'])).order_by(CrawlJob.job_number.desc()).first()
+            
+            if existing_job:
+                # Reuse the existing job by resetting its status to pending
+                existing_job.status = 'pending'
+                existing_job.started_at = None  # Will be set when job actually starts
+                existing_job.updated_at = datetime.utcnow()
+                existing_job.completed_at = None
+                existing_job.error_message = None
+                existing_job.total_pages = 0
+                new_job = existing_job
+            else:
+                # Create new crawl job record with pending status
+                new_job = CrawlJob(project_id=project_id)
+                new_job.status = 'pending'
+                new_job.updated_at = datetime.utcnow()
+                new_job.job_type = 'full_crawl'
+                db.session.add(new_job)
+            
+            db.session.commit()
+            
+            # Schedule the crawl job - scheduler will find the pending job and start it
+            crawler_scheduler.schedule_crawl(project_id)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Crawling job started successfully',
+                'job': {
+                    'id': new_job.id,
+                    'job_number': new_job.job_number,
+                    'status': new_job.status
+                }
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error starting crawl job for project {project_id}: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'Failed to start crawling job: {str(e)}'
+            }), 500
+    
+    @app.route('/api/projects/<int:project_id>/jobs/<job_id>/status')
+    @login_required
+    def get_job_status(project_id, job_id):
+        """Get status of a specific job"""
+        try:
+            # Verify project access
+            project = Project.query.filter_by(
+                id=project_id,
+                user_id=current_user.id
+            ).first()
+            
+            if not project:
+                return jsonify({
+                    'success': False,
+                    'message': 'Project not found or access denied'
+                }), 404
+            
+            # Get unified run state
+            from services.run_state_service import RunStateService
+            run_state_service = RunStateService(crawler_scheduler)
+            run_state_data = run_state_service.get_project_run_state(project_id)
+            
+            # Extract the actual state from the run state data
+            if isinstance(run_state_data, dict):
+                run_state = run_state_data.get('state', 'not_started')
+            else:
+                run_state = run_state_data if run_state_data else 'not_started'
+            
+            # Get latest job from database
+            from models.crawl_job import CrawlJob
+            latest_job = CrawlJob.query.filter_by(project_id=project_id).order_by(CrawlJob.job_number.desc()).first()
+            
+            if not latest_job:
+                return jsonify({
+                    'success': False,
+                    'message': 'Job not found'
+                }), 404
+            
+            # Format updated_at in IST timezone
+            updated_at_formatted = format_jobs_history_datetime(latest_job.updated_at)
+            
+            job_data = {
+                'id': latest_job.id,
+                'job_number': latest_job.job_number,
+                'status': latest_job.status,
+                'updated_at': updated_at_formatted,
+                'duration': latest_job.duration_formatted,
+                'pages': latest_job.total_pages,
+                'endTime': latest_job.completed_at.isoformat() if latest_job.completed_at else None
+            }
+            
+            return jsonify({
+                'success': True,
+                'job': job_data
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Error getting job status for project {project_id}, job {job_id}: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': 'Failed to get job status'
+            }), 500
 
 def _is_valid_url(url):
     """

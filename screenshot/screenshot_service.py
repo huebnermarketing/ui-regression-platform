@@ -1,5 +1,6 @@
 """
 Screenshot capture service using Playwright
+Enhanced with PathResolver for consistent file management
 """
 
 import os
@@ -13,17 +14,19 @@ from playwright.async_api import async_playwright, Browser, Page
 from models import db
 from models.project import ProjectPage
 from .dynamic_content_handler import DynamicContentHandler
+from utils.path_resolver import PathResolver
 
 class ScreenshotService:
     def __init__(self, base_screenshot_dir: str = "screenshots"):
         """
-        Initialize screenshot service
+        Initialize screenshot service with PathResolver
         
         Args:
             base_screenshot_dir (str): Base directory for storing screenshots
         """
         self.base_screenshot_dir = Path(base_screenshot_dir)
         self.logger = logging.getLogger(__name__)
+        self.path_resolver = PathResolver(base_screenshot_dir)
         
         # Viewport configurations
         self.viewports = {
@@ -65,7 +68,7 @@ class ScreenshotService:
             path (str): URL path to slugify
             
         Returns:
-            str: Slugified filename
+            str: Slugified filename (limited to safe length)
         """
         # Remove leading/trailing slashes and replace with underscores
         path = path.strip('/')
@@ -87,45 +90,46 @@ class ScreenshotService:
         if not slug:
             return 'page'
         
+        # Limit filename length to prevent filesystem issues (Windows has 260 char limit)
+        # Reserve 4 characters for .png extension
+        max_length = 250  # Leave some buffer for full path
+        
+        if len(slug) > max_length:
+            # Truncate and add hash for uniqueness
+            import hashlib
+            # Take first portion and append hash of full path
+            hash_suffix = hashlib.md5(path.encode()).hexdigest()[:8]
+            slug = slug[:max_length-9] + '_' + hash_suffix  # -9 for underscore and 8 char hash
+        
         return slug
     
-    def get_screenshot_paths(self, project_id: int, page_path: str, viewport: str = None) -> Tuple[Path, Path]:
+    def get_screenshot_paths(self, project_id: int, page_path: str, viewport: str,
+                           run_id: str) -> Tuple[Path, Path]:
         """
-        Get the file paths for staging and production screenshots
+        Get canonical file paths for staging and production screenshots
         
         Args:
             project_id (int): Project ID
             page_path (str): Page path
-            viewport (str): Viewport type (desktop, tablet, mobile) or None for legacy
+            viewport (str): Viewport type (desktop, tablet, mobile)
+            run_id (str): Run ID timestamp
             
         Returns:
             Tuple[Path, Path]: (staging_path, production_path)
         """
-        project_dir = self.base_screenshot_dir / str(project_id)
+        page_slug = self.path_resolver.slugify_page_path(page_path)
         
-        if viewport:
-            # Multi-viewport structure: /screenshots/{project_id}/{viewport}/staging|production/
-            viewport_dir = project_dir / viewport
-            staging_dir = viewport_dir / "staging"
-            production_dir = viewport_dir / "production"
-        else:
-            # Legacy structure: /screenshots/{project_id}/staging|production/
-            staging_dir = project_dir / "staging"
-            production_dir = project_dir / "production"
-        
-        # Create directories if they don't exist
-        staging_dir.mkdir(parents=True, exist_ok=True)
-        production_dir.mkdir(parents=True, exist_ok=True)
-        
-        filename = f"{self.slugify_path(page_path)}.png"
-        
-        return (
-            staging_dir / filename,
-            production_dir / filename
+        staging_path = self.path_resolver.get_canonical_path(
+            project_id, run_id, viewport, page_slug, 'staging'
         )
+        production_path = self.path_resolver.get_canonical_path(
+            project_id, run_id, viewport, page_slug, 'production'
+        )
+        
+        return (staging_path, production_path)
     
     async def capture_screenshot(self, url: str, output_path: Path, viewport: str = 'desktop',
-                               timeout: int = 30000, wait_for_dynamic: bool = True) -> bool:
+                               timeout: int = 30000, wait_for_dynamic: bool = None) -> bool:
         """
         Capture a full-page screenshot of a URL with enhanced dynamic content handling
         
@@ -179,7 +183,10 @@ class ScreenshotService:
                     self.logger.info(f"Navigating to: {url} ({viewport} viewport)")
                     await page.goto(url, timeout=timeout, wait_until="networkidle")
                     
-                    if wait_for_dynamic:
+                    # Use config default if wait_for_dynamic is None
+                    should_wait_for_dynamic = wait_for_dynamic if wait_for_dynamic is not None else self.config['wait_for_dynamic']
+                    
+                    if should_wait_for_dynamic:
                         # Enhanced dynamic content handling using new handler
                         load_results = await self.dynamic_handler.wait_for_complete_page_load(page)
                         
@@ -219,13 +226,15 @@ class ScreenshotService:
     
     # Old _wait_for_dynamic_content method removed - now using DynamicContentHandler
     
-    async def capture_page_screenshots(self, page_id: int, viewports: list = None) -> bool:
+    async def capture_page_screenshots(self, page_id: int, viewports: list = None,
+                                     run_id: str = None) -> bool:
         """
         Capture screenshots for both staging and production URLs of a page across multiple viewports
         
         Args:
             page_id (int): ProjectPage ID
             viewports (list): List of viewport types to capture (default: all viewports)
+            run_id (str): Run ID timestamp (auto-generated if None)
             
         Returns:
             bool: True if all screenshots were captured successfully
@@ -239,18 +248,27 @@ class ScreenshotService:
             
             # Default to all viewports if none specified
             if viewports is None:
-                viewports = ['desktop', 'tablet', 'mobile']
+                viewports = self.path_resolver.viewports
             
-            self.logger.info(f"Capturing screenshots for page: {page.path} (viewports: {viewports})")
+            # Generate run ID if not provided
+            if run_id is None:
+                run_id = self.path_resolver.generate_run_id()
+            
+            # Generate page slug
+            page_slug = self.path_resolver.slugify_page_path(page.path)
+            
+            self.logger.info(f"Capturing screenshots for page: {page.path} (viewports: {viewports}, run_id: {run_id})")
+            
+            # Create directories for this run
+            self.path_resolver.create_directories(page.project_id, run_id)
             
             all_success = True
-            captured_paths = {}
             
             # Capture screenshots for each viewport
             for viewport in viewports:
                 # Get screenshot paths for this viewport
                 staging_path, production_path = self.get_screenshot_paths(
-                    page.project_id, page.path, viewport
+                    page.project_id, page.path, viewport, run_id
                 )
                 
                 # Capture staging screenshot
@@ -267,11 +285,13 @@ class ScreenshotService:
                 all_success = all_success and viewport_success
                 
                 if viewport_success:
-                    # Store relative paths for database update
-                    captured_paths[f'staging_{viewport}'] = str(staging_path.relative_to(self.base_screenshot_dir))
-                    captured_paths[f'production_{viewport}'] = str(production_path.relative_to(self.base_screenshot_dir))
+                    # Update status for this viewport
+                    setattr(page, f'screenshot_status_{viewport}', 'completed')
                     self.logger.info(f"Successfully captured {viewport} screenshots for page: {page.path}")
                 else:
+                    # Update status and error for this viewport
+                    setattr(page, f'screenshot_status_{viewport}', 'failed')
+                    setattr(page, f'screenshot_error_{viewport}', f"Failed to capture {viewport} screenshots")
                     self.logger.error(f"Failed to capture {viewport} screenshots for page: {page.path}")
                     
                     # Clean up partial files
@@ -282,20 +302,11 @@ class ScreenshotService:
             
             # Update database with results
             if all_success:
-                # Update multi-viewport paths
-                for viewport in viewports:
-                    if f'staging_{viewport}' in captured_paths:
-                        setattr(page, f'staging_screenshot_path_{viewport}', captured_paths[f'staging_{viewport}'])
-                    if f'production_{viewport}' in captured_paths:
-                        setattr(page, f'production_screenshot_path_{viewport}', captured_paths[f'production_{viewport}'])
-                
-                # Also update legacy paths for backward compatibility (use desktop as default)
-                if 'staging_desktop' in captured_paths:
-                    page.staging_screenshot_path = captured_paths['staging_desktop']
-                if 'production_desktop' in captured_paths:
-                    page.production_screenshot_path = captured_paths['production_desktop']
-                
+                # Store run ID and page slug for URL generation
+                page.current_run_id = run_id
+                page.page_slug = page_slug
                 page.status = 'screenshot_complete'
+                page.last_run_at = db.func.now()
                 self.logger.info(f"Successfully captured all screenshots for page: {page.path}")
             else:
                 page.status = 'screenshot_failed'
@@ -309,7 +320,7 @@ class ScreenshotService:
             db.session.rollback()
             return False
     async def capture_manual_screenshots(self, page_ids: list, viewports: list = None,
-                                       environments: list = None) -> Tuple[int, int]:
+                                       environments: list = None, process_timestamp: str = None) -> Tuple[int, int]:
         """
         Capture screenshots for manually selected pages
         
@@ -317,6 +328,7 @@ class ScreenshotService:
             page_ids (list): List of ProjectPage IDs to capture
             viewports (list): List of viewport types (default: all)
             environments (list): List of environments ['staging', 'production'] (default: both)
+            process_timestamp (str): Process timestamp for new structure (auto-generated if None)
             
         Returns:
             Tuple[int, int]: (successful_count, failed_count)
@@ -332,8 +344,12 @@ class ScreenshotService:
             if environments is None:
                 environments = ['staging', 'production']
             
+            # Generate process timestamp if not provided
+            if process_timestamp is None:
+                process_timestamp = self.path_manager.generate_process_timestamp()
+            
             self.logger.info(f"Starting manual screenshot capture for {len(page_ids)} pages")
-            self.logger.info(f"Viewports: {viewports}, Environments: {environments}")
+            self.logger.info(f"Viewports: {viewports}, Environments: {environments}, Timestamp: {process_timestamp}")
             
             successful_count = 0
             failed_count = 0
@@ -354,9 +370,9 @@ class ScreenshotService:
                     
                     # Capture screenshots for each viewport
                     for viewport in viewports:
-                        # Get screenshot paths for this viewport
+                        # Get screenshot paths for this viewport using new structure
                         staging_path, production_path = self.get_screenshot_paths(
-                            page.project_id, page.path, viewport
+                            page.project_id, page.path, viewport, process_timestamp
                         )
                         
                         # Capture based on selected environments
@@ -365,7 +381,7 @@ class ScreenshotService:
                                 page.staging_url, staging_path, viewport
                             )
                             if staging_success:
-                                captured_paths[f'staging_{viewport}'] = str(staging_path.relative_to(self.base_screenshot_dir))
+                                captured_paths[f'staging_{viewport}'] = self.path_manager.get_relative_path(staging_path)
                             else:
                                 page_success = False
                         
@@ -374,7 +390,7 @@ class ScreenshotService:
                                 page.production_url, production_path, viewport
                             )
                             if production_success:
-                                captured_paths[f'production_{viewport}'] = str(production_path.relative_to(self.base_screenshot_dir))
+                                captured_paths[f'production_{viewport}'] = self.path_manager.get_relative_path(production_path)
                             else:
                                 page_success = False
                     
@@ -393,6 +409,8 @@ class ScreenshotService:
                         if 'production_desktop' in captured_paths:
                             page.production_screenshot_path = captured_paths['production_desktop']
                         
+                        # Store process timestamp for tracking
+                        page.current_run_id = process_timestamp
                         page.status = 'screenshot_complete'
                         successful_count += 1
                         self.logger.info(f"Successfully captured screenshots for page: {page.path}")
@@ -514,27 +532,27 @@ class ScreenshotService:
         Returns:
             str: URL to access the screenshot
         """
-        return f"/screenshots/{screenshot_path}"
+        return self.path_manager.get_url_path(screenshot_path)
     
-    def cleanup_project_screenshots(self, project_id: int) -> bool:
+    def cleanup_project_screenshots(self, project_id: int, keep_latest: int = 0) -> bool:
         """
-        Remove all screenshots for a project
+        Remove screenshots for a project
         
         Args:
             project_id (int): Project ID
+            keep_latest (int): Number of latest runs to keep (0 = delete all)
             
         Returns:
             bool: True if cleanup was successful
         """
         try:
-            project_dir = self.base_screenshot_dir / str(project_id)
-            
-            if project_dir.exists():
-                import shutil
-                shutil.rmtree(project_dir)
-                self.logger.info(f"Cleaned up screenshots for project {project_id}")
-            
-            return True
+            success = self.path_manager.cleanup_project_screenshots(project_id, keep_latest)
+            if success:
+                if keep_latest == 0:
+                    self.logger.info(f"Cleaned up all screenshots for project {project_id}")
+                else:
+                    self.logger.info(f"Cleaned up old screenshots for project {project_id}, kept latest {keep_latest} runs")
+            return success
             
         except Exception as e:
             self.logger.error(f"Error cleaning up screenshots for project {project_id}: {str(e)}")

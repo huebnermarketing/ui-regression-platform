@@ -15,14 +15,16 @@ from models import db
 from models.project import ProjectPage
 from screenshot.screenshot_service import ScreenshotService
 from diff.diff_engine import VisualDiffEngine
+from utils.path_manager import PathManager
 
 
 class FindDifferenceService:
-    def __init__(self):
+    def __init__(self, base_screenshots_dir: str = "screenshots"):
         """Initialize the unified Find Difference service"""
         self.logger = logging.getLogger(__name__)
-        self.screenshot_service = ScreenshotService()
-        self.diff_engine = VisualDiffEngine()
+        self.screenshot_service = ScreenshotService(base_screenshots_dir)
+        self.diff_engine = VisualDiffEngine(base_screenshots_dir=base_screenshots_dir)
+        self.path_manager = PathManager(base_screenshots_dir)
         
         # Viewport order for consistent processing
         self.viewport_order = ['desktop', 'tablet', 'mobile']
@@ -38,9 +40,7 @@ class FindDifferenceService:
         Returns:
             str: Run ID in format like "20250811-154210"
         """
-        # Get current time in IST
-        ist_now = datetime.now(self.ist_timezone)
-        return ist_now.strftime('%Y%m%d-%H%M%S')
+        return self.path_manager.generate_process_timestamp()
     
     def get_run_directory(self, project_id: int, run_id: str) -> Path:
         """
@@ -53,12 +53,12 @@ class FindDifferenceService:
         Returns:
             Path: Directory path for the run
         """
-        return Path("runs") / str(project_id) / run_id
+        return self.path_manager.get_project_directory(project_id, run_id)
     
     def get_screenshot_paths_for_run(self, project_id: int, run_id: str, page_path: str,
                                    viewport: str) -> Tuple[Path, Path]:
         """
-        Get screenshot paths for a specific run using nested env → viewport structure
+        Get screenshot paths for a specific run using new structure
         
         Args:
             project_id: Project ID
@@ -69,21 +69,10 @@ class FindDifferenceService:
         Returns:
             Tuple[Path, Path]: (staging_path, production_path)
         """
-        run_dir = self.get_run_directory(project_id, run_id)
-        screenshots_dir = run_dir / "screenshots"
-        
-        # Create nested env → viewport directories
-        staging_viewport_dir = screenshots_dir / "staging" / viewport
-        production_viewport_dir = screenshots_dir / "production" / viewport
-        staging_viewport_dir.mkdir(parents=True, exist_ok=True)
-        production_viewport_dir.mkdir(parents=True, exist_ok=True)
-        
-        filename = f"{self.screenshot_service.slugify_path(page_path)}.png"
-        
-        return (
-            staging_viewport_dir / filename,
-            production_viewport_dir / filename
+        production_path, staging_path, _ = self.path_manager.get_screenshot_paths(
+            project_id, run_id, page_path, viewport
         )
+        return (staging_path, production_path)
     
     def get_diff_path_for_run(self, project_id: int, run_id: str, page_path: str,
                              viewport: str) -> Path:
@@ -99,15 +88,9 @@ class FindDifferenceService:
         Returns:
             Path: Single diff image path
         """
-        run_dir = self.get_run_directory(project_id, run_id)
-        diff_dir = run_dir / "diffs" / viewport
-        diff_dir.mkdir(parents=True, exist_ok=True)
-        
-        slug = self.screenshot_service.slugify_path(page_path)
-        
-        # Single diff output file
-        diff_path = diff_dir / f"{slug}_diff.png"
-        
+        _, _, diff_path = self.path_manager.get_screenshot_paths(
+            project_id, run_id, page_path, viewport
+        )
         return diff_path
     
     async def capture_page_screenshots_for_run(self, page_id: int, run_id: str, 
@@ -146,12 +129,12 @@ class FindDifferenceService:
                 
                 # Capture staging screenshot
                 staging_success = await self.screenshot_service.capture_screenshot(
-                    page.staging_url, staging_path, viewport
+                    page.staging_url, staging_path, viewport, timeout=30000
                 )
                 
                 # Capture production screenshot
                 production_success = await self.screenshot_service.capture_screenshot(
-                    page.production_url, production_path, viewport
+                    page.production_url, production_path, viewport, timeout=30000
                 )
                 
                 viewport_success = staging_success and production_success
@@ -408,16 +391,10 @@ class FindDifferenceService:
     def _create_single_diff_overlay(self, staging_image: 'Image.Image', production_image: 'Image.Image',
                                    diff_mask: 'Image.Image', bboxes: list) -> 'Image.Image':
         """
-        Create a single diff overlay matching the reference "spot the difference" style:
-        
-        1. Base Layer (Unchanged Areas):
-           - Convert to prominent grayscale for maximum desaturation
-           - Reduce brightness to create muted background that makes highlights pop
-        
-        2. Difference Highlights:
-           - Major differences: bright vibrant red (#FF0000) - fully opaque and bold
-           - Minor differences: bright vibrant yellow (#FFFF00) - fully opaque and bold
-           - Expand highlight areas slightly for better visibility
+        Create a single diff overlay exactly matching the user's required format:
+        - Bright red/orange highlights for differences
+        - Grayscale background for unchanged areas
+        - "Spot the difference" style visualization
         
         Args:
             staging_image: The staging screenshot
@@ -426,7 +403,7 @@ class FindDifferenceService:
             bboxes: List of bounding boxes for differences
             
         Returns:
-            PIL Image with bold "spot the difference" style visualization
+            PIL Image with exact "spot the difference" style as shown in reference
         """
         from PIL import Image, ImageDraw, ImageFilter
         import numpy as np
@@ -441,65 +418,41 @@ class FindDifferenceService:
         # Convert diff mask to numpy array
         diff_array = np.array(diff_mask.convert('L'))
         
-        # Create a more prominent grayscale background for unchanged areas
-        unchanged_mask = diff_array == 0  # Areas with no differences
+        # Step 1: Convert ENTIRE image to grayscale first
+        # This creates the muted background effect shown in the reference
+        grayscale_values = np.dot(base_array[:, :, :3], [0.299, 0.587, 0.114])
         
-        if np.any(unchanged_mask):
-            # Convert unchanged areas to grayscale using luminance formula
-            grayscale_values = np.dot(base_array[unchanged_mask, :3], [0.299, 0.587, 0.114])
-            
-            # Apply strong desaturation with reduced brightness for muted background
-            # This creates the "faded" look that makes highlights pop
-            for i in range(3):  # RGB channels
-                # 85% grayscale + 15% original color, then reduce brightness by 20%
-                desaturated = (0.85 * grayscale_values + 0.15 * base_array[unchanged_mask, i]) * 0.8
-                result_array[unchanged_mask, i] = np.clip(desaturated, 0, 255).astype(np.uint8)
+        # Apply grayscale to all areas (will be overridden for differences)
+        for i in range(3):  # RGB channels
+            result_array[:, :, i] = grayscale_values.astype(np.uint8)
         
-        # Use original diff mask without expansion to avoid over-highlighting
-        # Only apply minimal smoothing to reduce noise
-        expanded_diff_array = diff_array.copy()
+        # Step 2: Apply bright red/orange highlights ONLY to difference areas
+        # This matches the exact format shown in the reference image
+        diff_pixels = diff_array > 30  # Threshold for detecting differences
         
-        # Optional: Apply minimal noise reduction (only if scipy available)
+        if np.any(diff_pixels):
+            # Apply bright red/orange color to ALL difference pixels
+            # Using a vibrant red-orange color (#FF4500) as shown in reference
+            result_array[diff_pixels, 0] = 255  # Red channel - full intensity
+            result_array[diff_pixels, 1] = 69   # Green channel - slight orange tint
+            result_array[diff_pixels, 2] = 0    # Blue channel - none
+        
+        # Step 3: Enhance difference visibility with slight expansion
+        # This ensures small differences are clearly visible
         try:
             from scipy import ndimage
-            # Very light smoothing to reduce single-pixel noise
-            expanded_diff_array = ndimage.median_filter(expanded_diff_array, size=2)
+            # Slightly dilate the difference areas to make them more prominent
+            diff_expanded = ndimage.binary_dilation(diff_pixels, iterations=1)
+            
+            # Apply the same bright color to expanded areas
+            result_array[diff_expanded, 0] = 255  # Red
+            result_array[diff_expanded, 1] = 69   # Orange tint
+            result_array[diff_expanded, 2] = 0    # Blue
         except ImportError:
-            # No smoothing if scipy not available - use original diff
+            # If scipy not available, use original diff pixels
             pass
         
-        # Apply bold, vibrant difference highlights
-        for bbox in bboxes:
-            x1, y1, x2, y2 = bbox
-            
-            # Calculate difference intensity and size in this region
-            region_diff = diff_array[y1:y2, x1:x2]
-            expanded_region_diff = expanded_diff_array[y1:y2, x1:x2]
-            diff_intensity = np.mean(region_diff) / 255.0
-            region_size = (x2 - x1) * (y2 - y1)
-            
-            # More conservative classification to reduce over-highlighting
-            # Major: very high intensity (>50%) AND significant area (>1000 pixels)
-            # Minor: moderate intensity (>30%) OR smaller significant area (>500 pixels)
-            # Skip very small or low-intensity differences
-            if diff_intensity < 0.2 and region_size < 500:
-                continue  # Skip insignificant differences
-            
-            is_major = diff_intensity > 0.5 and region_size > 1000
-            
-            # Create mask for actual difference pixels in this bounding box
-            bbox_mask = np.zeros_like(expanded_diff_array, dtype=bool)
-            bbox_mask[y1:y2, x1:x2] = True
-            diff_pixels_in_bbox = (expanded_diff_array > 30) & bbox_mask  # Higher threshold to reduce noise
-            
-            if is_major:
-                # Bright vibrant red (#FF0000) for major differences - bold and prominent
-                result_array[diff_pixels_in_bbox] = [255, 0, 0, 255]
-            else:
-                # Bright vibrant yellow (#FFFF00) for minor differences - bold and prominent
-                result_array[diff_pixels_in_bbox] = [255, 255, 0, 255]
-        
-        # Convert back to PIL Image without glow effects to prevent over-highlighting
+        # Convert back to PIL Image
         result = Image.fromarray(result_array, 'RGBA')
         
         return result.convert('RGB')
@@ -603,7 +556,7 @@ class FindDifferenceService:
                     if result.get('success'):
                         status = result.get('status', 'completed')
                         if status == 'no_changes':
-                            setattr(page, status_field, 'no_changes')
+                            setattr(page, status_field, 'completed')  # Use 'completed' for no changes
                         elif status == 'staging_vs_production':
                             setattr(page, status_field, 'completed')
                             # Update metrics for staging vs production comparison
@@ -746,8 +699,9 @@ class FindDifferenceService:
                     )
                     if staging_success:
                         viewport_paths['staging'] = str(staging_path)
-                        # Update database field
-                        setattr(page, f'staging_screenshot_path_{viewport}', str(staging_path))
+                        # Update database field with relative path
+                        relative_staging_path = self.path_manager.get_relative_path(staging_path)
+                        setattr(page, f'staging_screenshot_path_{viewport}', relative_staging_path)
                     else:
                         viewport_success = False
                         all_success = False
@@ -758,8 +712,9 @@ class FindDifferenceService:
                     )
                     if production_success:
                         viewport_paths['production'] = str(production_path)
-                        # Update database field
-                        setattr(page, f'production_screenshot_path_{viewport}', str(production_path))
+                        # Update database field with relative path
+                        relative_production_path = self.path_manager.get_relative_path(production_path)
+                        setattr(page, f'production_screenshot_path_{viewport}', relative_production_path)
                     else:
                         viewport_success = False
                         all_success = False
@@ -862,13 +817,13 @@ class FindDifferenceService:
                 # Capture staging screenshot with enhanced dynamic content handling
                 self.logger.info(f"Capturing staging screenshot with enhanced dynamic content detection...")
                 staging_success = await self.screenshot_service.capture_screenshot(
-                    page.staging_url, staging_path, viewport, wait_for_dynamic=True
+                    page.staging_url, staging_path, viewport, timeout=30000, wait_for_dynamic=True
                 )
                 
                 # Capture production screenshot with enhanced dynamic content handling
                 self.logger.info(f"Capturing production screenshot with enhanced dynamic content detection...")
                 production_success = await self.screenshot_service.capture_screenshot(
-                    page.production_url, production_path, viewport, wait_for_dynamic=True
+                    page.production_url, production_path, viewport, timeout=30000, wait_for_dynamic=True
                 )
                 
                 if not (staging_success and production_success):
@@ -896,9 +851,11 @@ class FindDifferenceService:
                         'status': diff_result.get('status', 'completed')
                     }
                     
-                    # Update database fields for this viewport
-                    setattr(page, f'staging_screenshot_path_{viewport}', str(staging_path))
-                    setattr(page, f'production_screenshot_path_{viewport}', str(production_path))
+                    # Update database fields for this viewport with relative paths
+                    relative_staging_path = self.path_manager.get_relative_path(staging_path)
+                    relative_production_path = self.path_manager.get_relative_path(production_path)
+                    setattr(page, f'staging_screenshot_path_{viewport}', relative_staging_path)
+                    setattr(page, f'production_screenshot_path_{viewport}', relative_production_path)
                     
                     # Update diff metrics
                     if viewport == 'desktop':
@@ -923,10 +880,10 @@ class FindDifferenceService:
             # Update final status
             if all_success:
                 page.find_diff_status = 'completed'
-                page.status = 'capture_and_diff_complete'
+                page.status = 'diff_generated'  # Use valid enum value
             else:
                 page.find_diff_status = 'failed'
-                page.status = 'capture_and_diff_failed'
+                page.status = 'diff_failed'  # Use valid enum value
             
             db.session.commit()
             

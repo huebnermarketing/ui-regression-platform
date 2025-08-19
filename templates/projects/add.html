@@ -460,12 +460,6 @@
             </div>
             <div class="nav-item">
                 <a href="#" class="nav-link">
-                    <i class="fas fa-images"></i>
-                    <span>Diff Results</span>
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="#" class="nav-link">
                     <i class="fas fa-chart-bar"></i>
                     <span>Analytics</span>
                 </a>
@@ -591,6 +585,29 @@
                                    value="{{ request.form.get('production_url', '') }}">
                             <div class="form-text">
                                 Full URL of your production environment (must start with http:// or https://)
+                            </div>
+                        </div>
+
+                        <!-- Page Restriction Option -->
+                        <div class="form-group">
+                            <div class="form-check" style="display: flex; align-items: flex-start; gap: 0.75rem; padding: 1rem; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.1); border-radius: 8px;">
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       id="is_page_restricted"
+                                       name="is_page_restricted"
+                                       value="1"
+                                       style="margin-top: 0.125rem; width: 18px; height: 18px; accent-color: var(--accent-color);"
+                                       {{ 'checked' if request.form.get('is_page_restricted') else '' }}>
+                                <div style="flex: 1;">
+                                    <label for="is_page_restricted" class="form-check-label" style="font-weight: 600; color: var(--primary-text); margin-bottom: 0.25rem; cursor: pointer;">
+                                        <i class="fas fa-filter" style="color: var(--accent-color); margin-right: 0.5rem;"></i>
+                                        Crawl this page + subpages only
+                                    </label>
+                                    <div class="form-text" style="margin: 0; font-size: 0.75rem; line-height: 1.4;">
+                                        <strong>When checked:</strong> Only crawl the provided URLs and their nested subpages.
+                                        <strong>When unchecked:</strong> Crawl the entire website starting from the root domain.
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

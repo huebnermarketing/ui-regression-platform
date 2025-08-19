@@ -6,8 +6,10 @@ class CrawlJob(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
-    status = db.Column(db.Enum('pending', 'running', 'completed', 'failed', 'paused', name='crawl_job_status'),
+    status = db.Column(db.Enum('pending', 'Crawling', 'Crawled', 'Job Failed', name='crawl_job_status'),
                       default='pending', nullable=False)
+    job_number = db.Column(db.Integer, nullable=False)  # Incremental per project
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     job_type = db.Column(db.String(20), default='crawl', nullable=False)
     total_pages = db.Column(db.Integer, default=0, nullable=False)
     started_at = db.Column(db.DateTime, nullable=True)
@@ -18,38 +20,49 @@ class CrawlJob(db.Model):
     # Relationship to project
     project = db.relationship('Project', backref=db.backref('crawl_jobs', lazy=True, cascade='all, delete-orphan'))
     
-    def __init__(self, project_id):
+    def __init__(self, project_id, job_number=None):
         self.project_id = project_id
         self.status = 'pending'
         self.total_pages = 0
         self.created_at = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
+        
+        # Auto-generate job_number if not provided
+        if job_number is None:
+            # Get the highest job_number for this project and increment
+            max_job = db.session.query(db.func.max(CrawlJob.job_number)).filter_by(project_id=project_id).scalar()
+            self.job_number = (max_job or 0) + 1
+        else:
+            self.job_number = job_number
     
     def start_job(self):
-        """Mark job as running and set started_at timestamp"""
-        self.status = 'running'
+        """Mark job as Crawling and set started_at timestamp"""
+        self.status = 'Crawling'
         self.started_at = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
     
     def start(self):
         """Alias for start_job for API compatibility"""
         self.start_job()
     
     def complete_job(self, total_pages):
-        """Mark job as completed and set completion details - ATOMIC & IDEMPOTENT"""
+        """Mark job as Crawled and set completion details - ATOMIC & IDEMPOTENT"""
         from sqlalchemy import text
         from models import db
         
         # Get current UTC time for consistent timezone handling
         completion_time = datetime.utcnow()
         
-        # Atomic completion - only update if still running
+        # Atomic completion - only update if still crawling
         # Use explicit UTC timestamp instead of NOW() to avoid timezone issues
         result = db.session.execute(text('''
             UPDATE crawl_jobs
-            SET status='completed',
+            SET status='Crawled',
                 completed_at=:completion_time,
+                updated_at=:completion_time,
                 total_pages=:total_pages,
                 error_message=NULL
-            WHERE id=:job_id AND status='running'
+            WHERE id=:job_id AND status='Crawling'
         '''), {
             'job_id': self.id,
             'total_pages': total_pages,
@@ -58,20 +71,22 @@ class CrawlJob(db.Model):
         
         if result.rowcount == 1:
             # Update local object to reflect database changes
-            self.status = 'completed'
+            self.status = 'Crawled'
             self.completed_at = completion_time
+            self.updated_at = completion_time
             self.total_pages = total_pages
             self.error_message = None
             return True
         else:
-            # Job was already completed or not running - this is OK (idempotent)
-            print(f"Job {self.id} completion was idempotent (already completed or not running)")
+            # Job was already completed or not crawling - this is OK (idempotent)
+            print(f"Job {self.id} completion was idempotent (already completed or not crawling)")
             return False
     
     def fail_job(self, error_message):
-        """Mark job as failed and set error details"""
-        self.status = 'failed'
+        """Mark job as Job Failed and set error details"""
+        self.status = 'Job Failed'
         self.completed_at = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
         self.error_message = error_message
     
     def fail(self, error_message):
@@ -106,7 +121,7 @@ class CrawlJob(db.Model):
             else:
                 # Convert timezone-aware datetime to UTC epoch
                 end_epoch = self.completed_at.timestamp()
-        elif self.status == 'running':
+        elif self.status == 'Crawling':
             # Job is still running, use current UTC time
             import time
             end_epoch = time.time()

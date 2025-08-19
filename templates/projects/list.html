@@ -227,7 +227,8 @@
             box-shadow: var(--card-shadow);
             border: 1px solid var(--border-color);
             transition: all 0.3s ease;
-            overflow: hidden;
+            overflow: visible;
+            position: relative;
         }
 
         .project-card:hover {
@@ -340,6 +341,8 @@
             padding: 1rem 1.5rem;
             background: var(--card-bg);
             border-top: 1px solid var(--border-color);
+            position: relative;
+            overflow: visible;
         }
 
         /* Empty State */
@@ -415,6 +418,479 @@
                 display: block;
             }
         }
+
+        /* History Modal Styles */
+        .screenshot-wrapper {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f8f9fa;
+        }
+
+        .screenshot-img {
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            width: 100%;
+            height: auto;
+        }
+
+        .screenshot-img:hover {
+            transform: scale(1.02);
+        }
+
+        .table th {
+            font-weight: 600;
+            color: var(--primary-text);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .table td {
+            vertical-align: middle;
+        }
+
+        .btn-screenshot {
+            background: var(--info-color);
+            color: white;
+            border: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .btn-screenshot:hover {
+            background: #2563eb;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .diff-percentage {
+            font-weight: 600;
+        }
+
+        .diff-low { color: var(--success-color); }
+        .diff-medium { color: var(--warning-color); }
+        .diff-high { color: var(--danger-color); }
+
+        /* Lightbox styles */
+        .lightbox-zoomed {
+            cursor: zoom-out !important;
+            transform: scale(1.5);
+        }
+
+        #overlayView .position-relative {
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        /* View Toggle Styles */
+        .view-toggle {
+            display: flex;
+            align-items: center;
+        }
+
+        .view-toggle-btn {
+            border-color: var(--border-color) !important;
+            color: var(--subtle-text) !important;
+            background: var(--background) !important;
+            transition: all 0.2s ease;
+        }
+
+        .view-toggle-btn:hover {
+            background: var(--card-bg) !important;
+            color: var(--primary-text) !important;
+            border-color: var(--accent-color) !important;
+        }
+
+        .view-toggle-btn.active {
+            background: var(--accent-color) !important;
+            color: white !important;
+            border-color: var(--accent-color) !important;
+        }
+
+        /* List View Styles - Table Format */
+        .project-list {
+            display: none; /* Hidden by default, shown when list view is active */
+            margin-bottom: 2rem;
+        }
+
+        .project-list.active {
+            display: block;
+        }
+
+        .project-grid.hidden {
+            display: none;
+        }
+
+        .project-list .table-card {
+            background: var(--background);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .project-list .table-card-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--card-bg);
+        }
+
+        .project-list .table-card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+            color: var(--primary-text);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .project-list .modern-table {
+            margin: 0;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .project-list .modern-table thead th {
+            background-color: var(--card-bg);
+            border: none;
+            border-bottom: 2px solid var(--border-color);
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--primary-text);
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+
+        .project-list .modern-table tbody tr {
+            border-bottom: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+            background: var(--background);
+            border-radius: 8px;
+            margin-bottom: 4px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+        }
+
+        .project-list .modern-table tbody tr:hover {
+            background-color: var(--card-bg);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(15, 23, 42, 0.15);
+            border-color: var(--accent-color);
+        }
+
+        .project-list .modern-table tbody td {
+            padding: 1.25rem 1.5rem;
+            border: none;
+            vertical-align: middle;
+            border-top: 1px solid transparent;
+            border-bottom: 1px solid transparent;
+        }
+
+        .project-list .project-name-link {
+            font-weight: 600;
+            color: var(--primary-text);
+            text-decoration: none;
+            font-size: 1rem;
+            transition: color 0.2s ease;
+        }
+
+        .project-list .project-name-link:hover {
+            color: var(--accent-color);
+        }
+
+        .project-list .project-url-text {
+            font-size: 0.8rem;
+            color: var(--subtle-text);
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Source Code Pro', monospace;
+            background: rgba(59, 130, 246, 0.05);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid rgba(59, 130, 246, 0.1);
+            display: inline-block;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+        }
+
+        .project-list .project-url-text:hover {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.2);
+            color: var(--primary-text);
+        }
+
+        .project-list .settings-btn {
+            background: var(--background);
+            border: 1px solid var(--border-color);
+            color: var(--subtle-text);
+            padding: 0.375rem 0.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            font-size: 0.75rem;
+        }
+
+        .project-list .settings-btn:hover {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+
+        .project-list .created-timestamp {
+            font-size: 0.875rem;
+            color: var(--subtle-text);
+        }
+
+        .project-list .created-date {
+            font-weight: 600;
+            color: var(--primary-text);
+        }
+
+        .project-list .created-time {
+            font-size: 0.75rem;
+            color: var(--subtle-text);
+            margin-top: 0.125rem;
+        }
+
+        /* Empty state for list view */
+        .project-list .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--subtle-text);
+            background: var(--background);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        .project-list .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .project-list .empty-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--primary-text);
+        }
+
+        .project-list .empty-description {
+            margin-bottom: 2rem;
+        }
+
+        /* Project Settings Dropdown */
+        .project-settings {
+            position: relative;
+            display: inline-block;
+        }
+
+        .project-settings-btn {
+            background: var(--background);
+            border: 1px solid var(--border-color);
+            color: var(--subtle-text);
+            padding: 0.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            font-size: 0.875rem;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+        }
+
+        .project-settings-btn:hover {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(59, 130, 246, 0.2);
+        }
+
+        .project-settings-btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        .project-settings-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--background);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+            min-width: 160px;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.2s ease;
+            margin-top: 4px;
+        }
+
+        .project-settings-dropdown.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .project-settings-dropdown::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            right: 8px;
+            width: 12px;
+            height: 12px;
+            background: var(--background);
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            border-right: none;
+            transform: rotate(45deg);
+        }
+
+        .project-settings-menu {
+            list-style: none;
+            margin: 0;
+            padding: 0.5rem 0;
+        }
+
+        .project-settings-menu li {
+            margin: 0;
+        }
+
+        .project-settings-menu button {
+            width: 100%;
+            background: none;
+            border: none;
+            padding: 0.75rem 1rem;
+            text-align: left;
+            color: var(--primary-text);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .project-settings-menu button:hover {
+            background: var(--card-bg);
+        }
+
+        .project-settings-menu button.danger {
+            color: var(--danger-color);
+        }
+
+        .project-settings-menu button.danger:hover {
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .project-settings-menu button i {
+            width: 16px;
+            text-align: center;
+        }
+
+        /* Mobile responsive for list view */
+        @media (max-width: 768px) {
+            .project-list-item {
+                grid-template-columns: auto 1fr;
+                grid-template-rows: auto auto auto;
+                gap: 0.5rem 0.75rem;
+                padding: 1rem;
+            }
+
+            .project-list-icon {
+                grid-row: 1 / 4;
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+            }
+
+            .project-list-header {
+                grid-column: 2;
+                grid-row: 1;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.25rem;
+            }
+
+            .project-list-status {
+                grid-column: 2;
+                grid-row: 2;
+                justify-content: flex-start;
+            }
+
+            .project-list-details {
+                grid-column: 2;
+                grid-row: 3;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.75rem;
+            }
+
+            .project-list-urls {
+                flex-direction: column;
+                gap: 0.5rem;
+                width: 100%;
+            }
+
+            .project-list-url {
+                min-width: auto;
+                max-width: none;
+            }
+
+            .project-list-actions {
+                flex-direction: row;
+                justify-content: space-between;
+                width: 100%;
+            }
+
+            .project-list-title {
+                font-size: 0.95rem;
+            }
+
+            .project-list-meta {
+                font-size: 0.65rem;
+            }
+
+            .project-list-url-value {
+                font-size: 0.65rem;
+            }
+
+            .view-toggle .d-none.d-md-inline {
+                display: none !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .top-bar {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: stretch;
+            }
+
+            .page-header {
+                text-align: center;
+            }
+
+            .d-flex.align-items-center.gap-3 {
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -465,12 +941,6 @@
             </div>
             <div class="nav-item">
                 <a href="#" class="nav-link">
-                    <i class="fas fa-images"></i>
-                    <span>Diff Results</span>
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="#" class="nav-link">
                     <i class="fas fa-chart-bar"></i>
                     <span>Analytics</span>
                 </a>
@@ -494,7 +964,7 @@
                 </a>
             </div>
             <div class="nav-item">
-                <a href="#" class="nav-link">
+                <a href="{{ url_for('settings.settings_page') }}" class="nav-link">
                     <i class="fas fa-cog"></i>
                     <span>Settings</span>
                 </a>
@@ -513,7 +983,21 @@
                 <h1>My Projects</h1>
                 <p>Manage your UI difference tracking projects</p>
             </div>
-            <div>
+            <div class="d-flex align-items-center gap-3">
+                <!-- View Toggle -->
+                <div class="view-toggle">
+                    <div class="btn-group" role="group" aria-label="View toggle">
+                        <button type="button" class="btn btn-outline-secondary btn-sm view-toggle-btn active" data-view="grid" onclick="switchView('grid')">
+                            <i class="fas fa-th"></i>
+                            <span class="d-none d-md-inline ms-1">Grid</span>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm view-toggle-btn" data-view="list" onclick="switchView('list')">
+                            <i class="fas fa-list"></i>
+                            <span class="d-none d-md-inline ms-1">List</span>
+                        </button>
+                    </div>
+                </div>
+                
                 <a href="{{ url_for('add_project') }}" class="btn-action">
                     <i class="fas fa-plus"></i>
                     Add New Project
@@ -537,10 +1021,10 @@
 
             <!-- Projects Grid -->
             {% if projects_with_status %}
-                <div class="project-grid">
+                <div class="project-grid" id="projectGrid">
                     {% for item in projects_with_status %}
                         {% set project = item.project %}
-                        {% set job_status = item.job_status %}
+                        {% set run_state = item.run_state %}
                         {% set page_count = item.page_count %}
                         <div class="project-card">
                             <div class="project-card-header">
@@ -554,31 +1038,27 @@
                                         Created {{ project.created_at|ist_datetime }}
                                     </div>
                                 </div>
-                                <!-- Job Status Badge on the right -->
+                                <!-- Pipeline Status Badge on the right -->
                                 <div>
-                                    {% if job_status.status == 'scheduled' %}
+                                    {% if run_state.state == 'crawling' %}
                                         <span class="status-badge warning">
-                                            <i class="fas fa-clock"></i>Crawling in Progress
+                                            <i class="fas fa-spider"></i>Crawling
                                         </span>
-                                    {% elif job_status.status == 'paused' %}
+                                    {% elif run_state.state == 'finding_difference' %}
                                         <span class="status-badge warning">
-                                            <i class="fas fa-pause-circle"></i>Job Paused
+                                            <i class="fas fa-search"></i>Finding Differences
                                         </span>
-                                    {% elif job_status.status == 'failed' %}
+                                    {% elif run_state.state == 'job_failed' %}
                                         <span class="status-badge danger">
-                                            <i class="fas fa-exclamation-triangle"></i>Job Failed
+                                            <i class="fas fa-exclamation-triangle"></i>Failed
                                         </span>
-                                    {% elif job_status.status == 'completed' and page_count > 0 %}
+                                    {% elif run_state.state == 'result' %}
                                         <span class="status-badge success">
-                                            <i class="fas fa-check-circle"></i>Ready
+                                            <i class="fas fa-check-circle"></i>Results Ready
                                         </span>
-                                    {% elif job_status.status == 'running' %}
-                                        <span class="status-badge warning">
-                                            <i class="fas fa-clock"></i>Job Running
-                                        </span>
-                                    {% elif page_count > 0 %}
-                                        <span class="status-badge success">
-                                            <i class="fas fa-check-circle"></i>Ready
+                                    {% elif run_state.state == 'crawled' %}
+                                        <span class="status-badge info">
+                                            <i class="fas fa-list"></i>Crawled
                                         </span>
                                     {% else %}
                                         <span class="status-badge secondary">
@@ -605,13 +1085,151 @@
                                 </div>
                             </div>
                             <div class="project-card-footer">
-                                <a href="{{ url_for('project_details', project_id=project.id) }}" class="btn-action w-100 justify-content-center">
-                                    <i class="fas fa-eye"></i>
-                                    View Details
-                                </a>
+                                <div class="d-flex gap-2 align-items-center justify-content-between">
+                                    <a href="{{ url_for('project_details', project_id=project.id) }}" class="btn-action" style="flex: 1;">
+                                        <i class="fas fa-eye"></i>
+                                        View Details
+                                    </a>
+                                    
+                                    <!-- Project Settings Dropdown -->
+                                    <div class="project-settings">
+                                        <button class="project-settings-btn" data-project-id="{{ project.id }}" aria-label="Project settings">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <div class="project-settings-dropdown" id="settings-{{ project.id }}">
+                                            <ul class="project-settings-menu">
+                                                <li>
+                                                    <button class="danger delete-project-btn" data-project-id="{{ project.id }}" data-project-name="{{ project.name }}">
+                                                        <i class="fas fa-trash"></i>
+                                                        Delete Project
+                                                    </button>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     {% endfor %}
+                </div>
+
+                <!-- Projects List -->
+                <div class="project-list" id="projectList">
+                    <div class="table-card">
+                        <div class="table-card-header">
+                            <h5 class="table-card-title">
+                                <i class="fas fa-folder"></i>All Projects
+                                <span class="status-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-color);">{{ projects_with_status|length }}</span>
+                            </h5>
+                        </div>
+                        {% if projects_with_status %}
+                        <div class="table-responsive">
+                            <table class="table modern-table">
+                                <thead>
+                                    <tr>
+                                        <th>Project</th>
+                                        <th>Staging URL</th>
+                                        <th>Production URL</th>
+                                        <th>Pages</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in projects_with_status %}
+                                        {% set project = item.project %}
+                                        {% set run_state = item.run_state %}
+                                        {% set page_count = item.page_count %}
+                                        <tr data-project-id="{{ project.id }}">
+                                            <td>
+                                                <div>
+                                                    <a href="{{ url_for('project_details', project_id=project.id) }}" class="project-name-link">
+                                                        {{ project.name }}
+                                                    </a>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="project-url-text" title="{{ project.staging_url }}">{{ project.staging_url }}</div>
+                                            </td>
+                                            <td>
+                                                <div class="project-url-text" title="{{ project.production_url }}">{{ project.production_url }}</div>
+                                            </td>
+                                            <td>{{ page_count }}</td>
+                                            <td>
+                                                {% if run_state.state == 'crawling' %}
+                                                    <span class="status-badge warning">
+                                                        <i class="fas fa-spider"></i>Crawling
+                                                    </span>
+                                                {% elif run_state.state == 'finding_difference' %}
+                                                    <span class="status-badge warning">
+                                                        <i class="fas fa-search"></i>Finding Differences
+                                                    </span>
+                                                {% elif run_state.state == 'job_failed' %}
+                                                    <span class="status-badge danger">
+                                                        <i class="fas fa-exclamation-triangle"></i>Failed
+                                                    </span>
+                                                {% elif run_state.state == 'result' %}
+                                                    <span class="status-badge success">
+                                                        <i class="fas fa-check-circle"></i>Results Ready
+                                                    </span>
+                                                {% elif run_state.state == 'crawled' %}
+                                                    <span class="status-badge info">
+                                                        <i class="fas fa-list"></i>Crawled
+                                                    </span>
+                                                {% else %}
+                                                    <span class="status-badge secondary">
+                                                        <i class="fas fa-minus-circle"></i>Not Started
+                                                    </span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="created-timestamp">
+                                                    <div class="created-date">{{ project.created_at.strftime('%d/%m/%Y') }}</div>
+                                                    <div class="created-time">{{ project.created_at.strftime('%I:%M:%S %p') }}</div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex gap-1 align-items-center">
+                                                    <a href="{{ url_for('project_details', project_id=project.id) }}" class="btn-action">
+                                                        <i class="fas fa-eye"></i>View
+                                                    </a>
+                                                    <div class="dropdown">
+                                                        <button class="settings-btn" data-bs-toggle="dropdown" aria-expanded="false">
+                                                            <i class="fas fa-ellipsis-v"></i>
+                                                        </button>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li><a class="dropdown-item" href="{{ url_for('project_details', project_id=project.id) }}">
+                                                                <i class="fas fa-eye"></i> View Details
+                                                            </a></li>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li><a class="dropdown-item text-danger delete-project-btn" href="#" data-project-id="{{ project.id }}" data-project-name="{{ project.name }}">
+                                                                <i class="fas fa-trash"></i> Delete Project
+                                                            </a></li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="empty-state">
+                            <div class="empty-icon">
+                                <i class="fas fa-folder"></i>
+                            </div>
+                            <h3 class="empty-title">No Projects Yet</h3>
+                            <p class="empty-description">
+                                Create your first project to start monitoring visual changes on your websites.
+                            </p>
+                            <a href="{{ url_for('add_project') }}" class="btn-action">
+                                <i class="fas fa-plus"></i>Create Project
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
             {% else %}
                 <!-- Empty State -->
@@ -630,6 +1248,230 @@
                     </a>
                 </div>
             {% endif %}
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div class="modal fade" id="historyModal" tabindex="-1" aria-labelledby="historyModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="historyModalLabel">
+                        <i class="fas fa-history me-2"></i>
+                        Project History
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Run Selector -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="runSelector" class="form-label">Select Process Run:</label>
+                            <select class="form-select" id="runSelector" onchange="loadRunPages()">
+                                <option value="">Loading runs...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-end h-100">
+                                <div class="text-muted">
+                                    <small id="runInfo">Select a run to view pages</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pages Table -->
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="pagesTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Page Path</th>
+                                    <th>Page Name</th>
+                                    <th>Viewport</th>
+                                    <th>Diff %</th>
+                                    <th>Status</th>
+                                    <th>Last Crawled</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pagesTableBody">
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        Select a process run to view pages
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination Controls -->
+                    <div class="d-flex justify-content-between align-items-center mt-3" id="historyPagination" style="display: none;">
+                        <div class="pagination-info">
+                            <small class="text-muted" id="paginationInfo">Showing 1 to 10 of 50 entries</small>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <label for="historyPerPage" class="form-label mb-0 small">Per page:</label>
+                                <select class="form-select form-select-sm" id="historyPerPage" style="width: auto;">
+                                    <option value="10">10</option>
+                                    <option value="20">20</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </div>
+                            <nav aria-label="History pagination">
+                                <ul class="pagination pagination-sm mb-0" id="historyPaginationNav">
+                                    <!-- Pagination buttons will be generated here -->
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screenshot Modal -->
+    <div class="modal fade" id="screenshotModal" tabindex="-1" aria-labelledby="screenshotModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="screenshotModalLabel">
+                        <i class="fas fa-images me-2"></i>
+                        Screenshot Comparison
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Controls -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="viewportSelector" class="form-label">Viewport:</label>
+                            <select class="form-select" id="viewportSelector" onchange="switchViewport()">
+                                <option value="Desktop">Desktop</option>
+                                <option value="Tablet">Tablet</option>
+                                <option value="Mobile">Mobile</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">View Mode:</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="viewMode" id="sideBySide" value="side-by-side" checked onchange="switchViewMode()">
+                                <label class="btn btn-outline-primary" for="sideBySide">Side by Side</label>
+                                
+                                <input type="radio" class="btn-check" name="viewMode" id="overlay" value="overlay" onchange="switchViewMode()">
+                                <label class="btn btn-outline-primary" for="overlay">Overlay</label>
+                                
+                                <input type="radio" class="btn-check" name="viewMode" id="diffOnly" value="diff-only" onchange="switchViewMode()">
+                                <label class="btn btn-outline-primary" for="diffOnly">Diff Only</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mt-4">
+                                <div class="text-muted">
+                                    <small>
+                                        <strong>Diff:</strong> <span id="diffPercentage">0.0%</span> |
+                                        <strong>Status:</strong> <span id="pageStatus">-</span> |
+                                        <strong>Last Crawled:</strong> <span id="lastCrawled">-</span>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Screenshot Container -->
+                    <div id="screenshotContainer">
+                        <!-- Side by Side View -->
+                        <div id="sideBySideView" class="row">
+                            <div class="col-md-4">
+                                <h6 class="text-center mb-2">Production (Baseline)</h6>
+                                <div class="screenshot-wrapper">
+                                    <img id="productionImg" src="" alt="Production Screenshot" class="img-fluid screenshot-img" onclick="openLightbox(this.src, 'Production')">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <h6 class="text-center mb-2">Staging (Current)</h6>
+                                <div class="screenshot-wrapper">
+                                    <img id="stagingImg" src="" alt="Staging Screenshot" class="img-fluid screenshot-img" onclick="openLightbox(this.src, 'Staging')">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <h6 class="text-center mb-2">Difference Overlay</h6>
+                                <div class="screenshot-wrapper">
+                                    <img id="diffImg" src="" alt="Diff Screenshot" class="img-fluid screenshot-img" onclick="openLightbox(this.src, 'Difference')">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Overlay View -->
+                        <div id="overlayView" class="text-center" style="display: none;">
+                            <div class="position-relative d-inline-block">
+                                <img id="overlayBaseImg" src="" alt="Base Screenshot" class="img-fluid screenshot-img">
+                                <img id="overlayTopImg" src="" alt="Overlay Screenshot" class="img-fluid screenshot-img position-absolute top-0 start-0" style="opacity: 0.5;">
+                            </div>
+                            <div class="mt-2">
+                                <label for="overlayOpacity" class="form-label">Overlay Opacity:</label>
+                                <input type="range" class="form-range" id="overlayOpacity" min="0" max="100" value="50" onchange="updateOverlayOpacity()">
+                            </div>
+                        </div>
+
+                        <!-- Diff Only View -->
+                        <div id="diffOnlyView" class="text-center" style="display: none;">
+                            <h6 class="mb-2">Difference Overlay</h6>
+                            <img id="diffOnlyImg" src="" alt="Diff Screenshot" class="img-fluid screenshot-img" onclick="openLightbox(this.src, 'Difference')">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteProjectModal" tabindex="-1" aria-labelledby="deleteProjectModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteProjectModalLabel">
+                        <i class="fas fa-exclamation-triangle text-danger me-2"></i>
+                        Delete Project
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete the project <strong id="deleteProjectName"></strong>?</p>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> This action cannot be undone. All project data, pages, and screenshots will be permanently deleted.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <form id="deleteProjectForm" method="POST" style="display: inline;">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash me-2"></i>
+                            Delete Project
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox Modal -->
+    <div class="modal fade" id="lightboxModal" tabindex="-1" aria-labelledby="lightboxModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content bg-dark">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title text-white" id="lightboxModalLabel">
+                        <i class="fas fa-search-plus me-2"></i>
+                        Image Viewer
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body d-flex align-items-center justify-content-center">
+                    <img id="lightboxImg" src="" alt="Lightbox Image" class="img-fluid" style="max-height: 90vh; cursor: zoom-in;" onclick="toggleZoom()">
+                </div>
+            </div>
         </div>
     </div>
 
@@ -679,6 +1521,447 @@
             if (runningStatuses.length > 0) {
                 // Refresh every 5 seconds if there are running jobs
                 setInterval(refreshProjectStatuses, 5000);
+            }
+        });
+
+        // History Modal Variables
+        let currentProjectId = null;
+        let currentProjectName = '';
+        let currentRuns = [];
+        let currentPages = [];
+        let currentScreenshots = {};
+        let currentPage = 1;
+        let currentPerPage = 10;
+        let currentPagination = null;
+
+        // Open History Modal
+        function openHistoryModal(projectId, projectName) {
+            currentProjectId = projectId;
+            currentProjectName = projectName;
+            
+            document.getElementById('historyModalLabel').innerHTML =
+                `<i class="fas fa-history me-2"></i>Project History - ${projectName}`;
+            
+            // Show modal with proper configuration
+            const modal = new bootstrap.Modal(document.getElementById('historyModal'), {
+                backdrop: 'static',
+                keyboard: false
+            });
+            modal.show();
+            
+            // Load runs
+            loadProjectRuns();
+        }
+
+        // Load Project Runs
+        async function loadProjectRuns() {
+            try {
+                const response = await fetch(`/api/history/project/${currentProjectId}/runs`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentRuns = data.runs;
+                    populateRunSelector();
+                } else {
+                    console.error('Failed to load runs:', data.error);
+                    showError('Failed to load project runs');
+                }
+            } catch (error) {
+                console.error('Error loading runs:', error);
+                showError('Error loading project runs');
+            }
+        }
+
+        // Populate Run Selector
+        function populateRunSelector() {
+            const selector = document.getElementById('runSelector');
+            selector.innerHTML = '';
+            
+            if (currentRuns.length === 0) {
+                selector.innerHTML = '<option value="">No runs found</option>';
+                document.getElementById('runInfo').textContent = 'No process runs found for this project';
+                return;
+            }
+            
+            selector.innerHTML = '<option value="">Select a run...</option>';
+            currentRuns.forEach(run => {
+                const option = document.createElement('option');
+                option.value = run.timestamp;
+                option.textContent = `${run.datetime} (${run.page_count} pages)`;
+                selector.appendChild(option);
+            });
+            
+            document.getElementById('runInfo').textContent = `${currentRuns.length} process runs available`;
+        }
+
+        // Load Run Pages
+        async function loadRunPages(page = 1, perPage = currentPerPage) {
+            const selector = document.getElementById('runSelector');
+            const selectedTimestamp = selector.value;
+            
+            if (!selectedTimestamp) {
+                clearPagesTable();
+                return;
+            }
+            
+            try {
+                const url = `/api/history/project/${currentProjectId}/run/${selectedTimestamp}/pages?page=${page}&per_page=${perPage}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentPages = data.pages;
+                    currentPage = page;
+                    currentPerPage = perPage;
+                    currentPagination = data.pagination;
+                    
+                    populatePagesTable();
+                    updatePaginationControls(data.pagination);
+                } else {
+                    console.error('Failed to load pages:', data.error);
+                    showError('Failed to load run pages');
+                }
+            } catch (error) {
+                console.error('Error loading pages:', error);
+                showError('Error loading run pages');
+            }
+        }
+
+        // Populate Pages Table
+        function populatePagesTable() {
+            const tbody = document.getElementById('pagesTableBody');
+            tbody.innerHTML = '';
+            
+            if (currentPages.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            <i class="fas fa-info-circle me-2"></i>
+                            No pages found for this run
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            currentPages.forEach(page => {
+                const row = document.createElement('tr');
+                
+                // Determine diff percentage class
+                let diffClass = 'diff-low';
+                if (page.diff_percentage > 5) diffClass = 'diff-medium';
+                if (page.diff_percentage > 15) diffClass = 'diff-high';
+                
+                row.innerHTML = `
+                    <td><code>${page.page_path}</code></td>
+                    <td>${page.page_name}</td>
+                    <td><span class="badge bg-secondary">${page.viewport}</span></td>
+                    <td><span class="diff-percentage ${diffClass}">${page.diff_percentage.toFixed(1)}%</span></td>
+                    <td><span class="badge bg-success">${page.status}</span></td>
+                    <td><small class="text-muted">${page.last_crawled}</small></td>
+                    <td>
+                        <button class="btn-screenshot" onclick="openScreenshotModal('${page.page_path}', '${page.page_name}', '${page.viewport}', ${page.diff_percentage}, '${page.status}', '${page.last_crawled}', '${JSON.stringify(page.screenshots).replace(/"/g, '&quot;')}')">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        // Clear Pages Table
+        function clearPagesTable() {
+            const tbody = document.getElementById('pagesTableBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center text-muted">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Select a process run to view pages
+                    </td>
+                </tr>
+            `;
+            document.getElementById('historyPagination').style.display = 'none';
+        }
+
+        // Open Screenshot Modal
+        function openScreenshotModal(pagePath, pageName, viewport, diffPercentage, status, lastCrawled, screenshotsJson) {
+            try {
+                currentScreenshots = JSON.parse(screenshotsJson);
+                
+                // Set modal title
+                document.getElementById('screenshotModalLabel').innerHTML =
+                    `<i class="fas fa-images me-2"></i>Screenshot Comparison - ${pageName}`;
+                
+                // Set viewport selector
+                document.getElementById('viewportSelector').value = viewport;
+                
+                // Set page info
+                document.getElementById('diffPercentage').textContent = `${diffPercentage.toFixed(1)}%`;
+                document.getElementById('pageStatus').textContent = status;
+                document.getElementById('lastCrawled').textContent = lastCrawled;
+                
+                // Load screenshots
+                loadScreenshots();
+                
+                // Show modal with proper configuration
+                const modal = new bootstrap.Modal(document.getElementById('screenshotModal'), {
+                    backdrop: 'static',
+                    keyboard: false
+                });
+                modal.show();
+                
+            } catch (error) {
+                console.error('Error opening screenshot modal:', error);
+                showError('Error loading screenshots');
+            }
+        }
+
+        // Load Screenshots
+        function loadScreenshots() {
+            if (!currentScreenshots) return;
+            
+            // Load images
+            document.getElementById('productionImg').src = currentScreenshots.production;
+            document.getElementById('stagingImg').src = currentScreenshots.staging;
+            document.getElementById('diffImg').src = currentScreenshots.diff;
+            
+            // Load overlay images
+            document.getElementById('overlayBaseImg').src = currentScreenshots.production;
+            document.getElementById('overlayTopImg').src = currentScreenshots.staging;
+            
+            // Load diff only image
+            document.getElementById('diffOnlyImg').src = currentScreenshots.diff;
+        }
+
+        // Switch Viewport
+        function switchViewport() {
+            // This would need to be implemented to load different viewport screenshots
+            // For now, we'll just reload the current screenshots
+            loadScreenshots();
+        }
+
+        // Switch View Mode
+        function switchViewMode() {
+            const viewMode = document.querySelector('input[name="viewMode"]:checked').value;
+            
+            // Hide all views
+            document.getElementById('sideBySideView').style.display = 'none';
+            document.getElementById('overlayView').style.display = 'none';
+            document.getElementById('diffOnlyView').style.display = 'none';
+            
+            // Show selected view
+            switch (viewMode) {
+                case 'side-by-side':
+                    document.getElementById('sideBySideView').style.display = 'block';
+                    break;
+                case 'overlay':
+                    document.getElementById('overlayView').style.display = 'block';
+                    break;
+                case 'diff-only':
+                    document.getElementById('diffOnlyView').style.display = 'block';
+                    break;
+            }
+        }
+
+        // Update Overlay Opacity
+        function updateOverlayOpacity() {
+            const opacity = document.getElementById('overlayOpacity').value / 100;
+            document.getElementById('overlayTopImg').style.opacity = opacity;
+        }
+
+        // Open Lightbox
+        function openLightbox(imageSrc, imageTitle) {
+            document.getElementById('lightboxImg').src = imageSrc;
+            document.getElementById('lightboxModalLabel').innerHTML =
+                `<i class="fas fa-search-plus me-2"></i>Image Viewer - ${imageTitle}`;
+            
+            const modal = new bootstrap.Modal(document.getElementById('lightboxModal'));
+            modal.show();
+        }
+
+        // Toggle Zoom in Lightbox
+        function toggleZoom() {
+            const img = document.getElementById('lightboxImg');
+            img.classList.toggle('lightbox-zoomed');
+        }
+
+        // Show Error Message
+        function showError(message) {
+            // Create and show a toast or alert
+            console.error(message);
+            alert(message); // Simple alert for now, could be improved with toast notifications
+        }
+
+
+        // Update pagination controls
+        function updatePaginationControls(pagination) {
+            if (!pagination || pagination.pages <= 1) {
+                document.getElementById('historyPagination').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('historyPagination').style.display = 'flex';
+            
+            // Update pagination info
+            const start = ((pagination.page - 1) * pagination.per_page) + 1;
+            const end = Math.min(pagination.page * pagination.per_page, pagination.total);
+            document.getElementById('paginationInfo').textContent =
+                `Showing ${start} to ${end} of ${pagination.total} entries`;
+            
+            // Update per page selector
+            document.getElementById('historyPerPage').value = pagination.per_page;
+            
+            // Generate pagination buttons
+            generatePaginationButtons(pagination);
+        }
+
+        // Generate pagination buttons
+        function generatePaginationButtons(pagination) {
+            const nav = document.getElementById('historyPaginationNav');
+            nav.innerHTML = '';
+            
+            // Previous button
+            const prevLi = document.createElement('li');
+            prevLi.className = `page-item ${!pagination.has_prev ? 'disabled' : ''}`;
+            prevLi.innerHTML = `
+                <a class="page-link" href="#" onclick="changePage(${pagination.prev_num})" ${!pagination.has_prev ? 'tabindex="-1"' : ''}>
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            `;
+            nav.appendChild(prevLi);
+            
+            // Page numbers
+            const startPage = Math.max(1, pagination.page - 2);
+            const endPage = Math.min(pagination.pages, pagination.page + 2);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const pageLi = document.createElement('li');
+                pageLi.className = `page-item ${i === pagination.page ? 'active' : ''}`;
+                pageLi.innerHTML = `
+                    <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+                `;
+                nav.appendChild(pageLi);
+            }
+            
+            // Next button
+            const nextLi = document.createElement('li');
+            nextLi.className = `page-item ${!pagination.has_next ? 'disabled' : ''}`;
+            nextLi.innerHTML = `
+                <a class="page-link" href="#" onclick="changePage(${pagination.next_num})" ${!pagination.has_next ? 'tabindex="-1"' : ''}>
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            `;
+            nav.appendChild(nextLi);
+        }
+
+        // Change page function
+        function changePage(page) {
+            if (page) {
+                loadRunPages(page, currentPerPage);
+            }
+            return false;
+        }
+
+        // Change per page function
+        function changePerPage() {
+            const perPage = parseInt(document.getElementById('historyPerPage').value);
+            loadRunPages(1, perPage);
+        }
+
+        // Add event listener for per page selector
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('historyPerPage').addEventListener('change', changePerPage);
+            
+            // Initialize view from localStorage or default to grid
+            const savedView = localStorage.getItem('projectsView') || 'grid';
+            switchView(savedView);
+            
+            // Project settings button handlers
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('.project-settings-btn')) {
+                    const btn = e.target.closest('.project-settings-btn');
+                    const projectId = btn.getAttribute('data-project-id');
+                    toggleProjectSettings(e, projectId);
+                }
+                
+                if (e.target.closest('.delete-project-btn')) {
+                    const btn = e.target.closest('.delete-project-btn');
+                    const projectId = btn.getAttribute('data-project-id');
+                    const projectName = btn.getAttribute('data-project-name');
+                    deleteProject(projectId, projectName);
+                }
+            });
+        });
+
+        // View switching functionality
+        function switchView(viewType) {
+            const gridView = document.getElementById('projectGrid');
+            const listView = document.getElementById('projectList');
+            const gridBtn = document.querySelector('[data-view="grid"]');
+            const listBtn = document.querySelector('[data-view="list"]');
+            
+            if (viewType === 'list') {
+                // Show list view, hide grid view
+                if (gridView) gridView.classList.add('hidden');
+                if (listView) listView.classList.add('active');
+                
+                // Update button states
+                if (gridBtn) gridBtn.classList.remove('active');
+                if (listBtn) listBtn.classList.add('active');
+                
+                // Save preference
+                localStorage.setItem('projectsView', 'list');
+            } else {
+                // Show grid view, hide list view (default)
+                if (gridView) gridView.classList.remove('hidden');
+                if (listView) listView.classList.remove('active');
+                
+                // Update button states
+                if (gridBtn) gridBtn.classList.add('active');
+                if (listBtn) listBtn.classList.remove('active');
+                
+                // Save preference
+                localStorage.setItem('projectsView', 'grid');
+            }
+        }
+
+        // Project Settings Dropdown functionality
+        function toggleProjectSettings(event, projectId) {
+            event.stopPropagation();
+            
+            // Close all other dropdowns
+            document.querySelectorAll('.project-settings-dropdown.show').forEach(dropdown => {
+                if (dropdown.id !== `settings-${projectId}`) {
+                    dropdown.classList.remove('show');
+                }
+            });
+            
+            // Toggle current dropdown
+            const dropdown = document.getElementById(`settings-${projectId}`);
+            dropdown.classList.toggle('show');
+        }
+
+        // Delete Project functionality
+        function deleteProject(projectId, projectName) {
+            // Set project name in modal
+            document.getElementById('deleteProjectName').textContent = projectName;
+            
+            // Set form action
+            const form = document.getElementById('deleteProjectForm');
+            form.action = `/projects/${projectId}/delete`;
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('deleteProjectModal'));
+            modal.show();
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.project-settings')) {
+                document.querySelectorAll('.project-settings-dropdown.show').forEach(dropdown => {
+                    dropdown.classList.remove('show');
+                });
             }
         });
     </script>

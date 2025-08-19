@@ -10,6 +10,7 @@ class Project(db.Model):
     production_url = db.Column(db.Text, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_page_restricted = db.Column(db.Boolean, default=False, nullable=False)
     
     # Relationship to user
     user = db.relationship('User', backref=db.backref('projects', lazy=True))
@@ -20,11 +21,12 @@ class Project(db.Model):
     # Unique constraint for project name per user
     __table_args__ = (db.UniqueConstraint('name', 'user_id', name='unique_project_name_per_user'),)
     
-    def __init__(self, name, staging_url, production_url, user_id):
+    def __init__(self, name, staging_url, production_url, user_id, is_page_restricted=False):
         self.name = name
         self.staging_url = staging_url
         self.production_url = production_url
         self.user_id = user_id
+        self.is_page_restricted = is_page_restricted
     
     def __repr__(self):
         return f'<Project {self.name}>'

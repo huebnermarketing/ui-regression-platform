@@ -37,8 +37,7 @@ def register_crawl_queue_routes(app, crawler_scheduler=None):
             'queued': 0,
             'running': 0,
             'completed': 0,
-            'failed': 0,
-            'paused': 0
+            'failed': 0
         }
         
         for stat in kpi_stats:
@@ -181,8 +180,7 @@ def register_crawl_queue_routes(app, crawler_scheduler=None):
             'queued': 0,
             'running': 0,
             'completed': 0,
-            'failed': 0,
-            'paused': 0
+            'failed': 0
         }
         
         for stat in kpi_stats:

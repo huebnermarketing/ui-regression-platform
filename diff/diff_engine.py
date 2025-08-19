@@ -15,6 +15,7 @@ from PIL import Image, ImageChops, ImageFilter, ImageDraw
 from scipy import ndimage
 from models import db
 from models.project import ProjectPage
+from utils.path_manager import PathManager
 
 class DiffConfig:
     """Configuration for diff generation"""
@@ -39,29 +40,31 @@ class DiffConfig:
 class VisualDiffEngine:
     """Main visual diff engine for comparing screenshots"""
     
-    def __init__(self, config: Optional[DiffConfig] = None):
+    def __init__(self, config: Optional[DiffConfig] = None, base_screenshots_dir: str = "screenshots"):
         """
         Initialize the diff engine
         
         Args:
             config: Configuration object, uses defaults if None
+            base_screenshots_dir: Base directory for screenshots (default: "screenshots")
         """
         self.config = config or DiffConfig()
         self.logger = logging.getLogger(__name__)
+        self.path_manager = PathManager(base_screenshots_dir)
         
         # Ensure output directory exists
         Path(self.config.output_dir).mkdir(parents=True, exist_ok=True)
     
     def normalize_images(self, img1: Image.Image, img2: Image.Image) -> Tuple[Image.Image, Image.Image]:
         """
-        Normalize two images to same size and format for comparison
+        Normalize two images to same size and format for comparison with proper alignment
         
         Args:
             img1: First image (staging)
             img2: Second image (production)
             
         Returns:
-            Tuple of normalized images
+            Tuple of normalized and aligned images
         """
         # Convert to RGBA for consistent processing
         if img1.mode != 'RGBA':
@@ -83,54 +86,80 @@ class VisualDiffEngine:
         normalized_img1 = Image.new('RGBA', (target_width, target_height), (255, 255, 255, 255))
         normalized_img2 = Image.new('RGBA', (target_width, target_height), (255, 255, 255, 255))
         
-        # Paste original images at top-left (0,0)
-        normalized_img1.paste(img1, (0, 0))
-        normalized_img2.paste(img2, (0, 0))
+        # Center images for better alignment (instead of top-left)
+        offset1_x = (target_width - w1) // 2
+        offset1_y = (target_height - h1) // 2
+        offset2_x = (target_width - w2) // 2
+        offset2_y = (target_height - h2) // 2
+        
+        # Paste original images centered
+        normalized_img1.paste(img1, (offset1_x, offset1_y))
+        normalized_img2.paste(img2, (offset2_x, offset2_y))
         
         # Apply optional blur for anti-alias noise reduction
         if self.config.enable_blur:
             normalized_img1 = normalized_img1.filter(ImageFilter.GaussianBlur(radius=self.config.blur_radius))
             normalized_img2 = normalized_img2.filter(ImageFilter.GaussianBlur(radius=self.config.blur_radius))
         
+        # Additional alignment check - if images are very similar in size, try to align them better
+        if abs(w1 - w2) <= 10 and abs(h1 - h2) <= 10:
+            # Images are nearly the same size, use exact positioning for pixel-perfect alignment
+            normalized_img1 = Image.new('RGBA', (target_width, target_height), (255, 255, 255, 255))
+            normalized_img2 = Image.new('RGBA', (target_width, target_height), (255, 255, 255, 255))
+            
+            # Paste at exact positions for pixel-perfect comparison
+            normalized_img1.paste(img1, (0, 0))
+            normalized_img2.paste(img2, (0, 0))
+        
         return normalized_img1, normalized_img2
     
     def compute_diff_mask(self, img1: Image.Image, img2: Image.Image) -> Image.Image:
         """
-        Compute binary mask of differences between two images
+        Compute precise pixel-level difference mask between two images
         
         Args:
-            img1: First normalized image
-            img2: Second normalized image
+            img1: First normalized image (staging)
+            img2: Second normalized image (production)
             
         Returns:
-            Binary mask image (L mode, 0/255 values)
+            Binary mask image (L mode, 0/255 values) with precise pixel differences
         """
-        # Compute absolute difference
-        diff = ImageChops.difference(img1, img2)
+        # Convert images to numpy arrays for precise pixel comparison
+        img1_array = np.array(img1)
+        img2_array = np.array(img2)
         
-        # Convert to grayscale for thresholding
-        diff_gray = diff.convert('L')
+        # Compute per-channel differences
+        diff_r = np.abs(img1_array[:, :, 0].astype(np.float32) - img2_array[:, :, 0].astype(np.float32))
+        diff_g = np.abs(img1_array[:, :, 1].astype(np.float32) - img2_array[:, :, 1].astype(np.float32))
+        diff_b = np.abs(img1_array[:, :, 2].astype(np.float32) - img2_array[:, :, 2].astype(np.float32))
         
-        # Apply threshold to create binary mask
+        # Calculate perceptual difference using weighted RGB (closer to human vision)
+        # Standard weights for luminance calculation
+        perceptual_diff = (0.299 * diff_r + 0.587 * diff_g + 0.114 * diff_b)
+        
+        # Apply threshold for pixel-level sensitivity
         threshold = self.config.per_pixel_threshold
-        diff_array = np.array(diff_gray)
+        mask_array = np.where(perceptual_diff > threshold, 255, 0).astype(np.uint8)
         
-        # Create binary mask: pixels above threshold become 255, others become 0
-        mask_array = np.where(diff_array > threshold, 255, 0).astype(np.uint8)
-        
-        # Apply morphological operations to clean up the mask
+        # Optional: Apply minimal morphological operations only if needed
+        # Reduce morphological operations to preserve pixel-level precision
         if self.config.dilate_iterations > 0:
-            # Dilate to close gaps
+            # Use smaller structuring element for precise pixel detection
+            structure = np.ones((3, 3))  # Smaller 3x3 instead of default
             mask_array = ndimage.binary_dilation(
-                mask_array > 0, 
-                iterations=self.config.dilate_iterations
+                mask_array > 0,
+                structure=structure,
+                iterations=min(1, self.config.dilate_iterations)  # Limit to 1 iteration max
             ).astype(np.uint8) * 255
         
-        if self.config.erode_iterations > 0:
-            # Erode to tidy edges
+        # Skip erosion for pixel-perfect detection unless specifically needed
+        if self.config.erode_iterations > 0 and self.config.dilate_iterations > 0:
+            # Only erode if we dilated, and use minimal erosion
+            structure = np.ones((3, 3))
             mask_array = ndimage.binary_erosion(
-                mask_array > 0, 
-                iterations=self.config.erode_iterations
+                mask_array > 0,
+                structure=structure,
+                iterations=min(1, self.config.erode_iterations)  # Limit to 1 iteration max
             ).astype(np.uint8) * 255
         
         return Image.fromarray(mask_array, mode='L')
@@ -176,53 +205,110 @@ class VisualDiffEngine:
         self.logger.debug(f"Found {len(bounding_boxes)} bounding boxes (filtered from {num_features} components)")
         return bounding_boxes
     
-    def create_highlighted_diff(self, base_image: Image.Image, mask: Image.Image, 
-                              bounding_boxes: List[List[int]]) -> Image.Image:
+    def create_highlighted_diff(self, staging_image: Image.Image, production_image: Image.Image,
+                              mask: Image.Image, bounding_boxes: List[List[int]]) -> Image.Image:
         """
-        Create highlighted diff image with red overlay on differences
+        Create professional-quality highlighted diff image with bright highlights on changes
+        and dimmed grayscale for unchanged areas
         
         Args:
-            base_image: Base image (usually production)
+            staging_image: Staging image (for reference)
+            production_image: Production image (base for diff)
             mask: Binary difference mask
             bounding_boxes: List of bounding boxes to highlight
             
         Returns:
-            Highlighted diff image
+            High-quality highlighted diff image
         """
-        # Convert base image to RGBA if needed
-        if base_image.mode != 'RGBA':
-            base_image = base_image.convert('RGBA')
+        # Convert images to RGBA if needed
+        if staging_image.mode != 'RGBA':
+            staging_image = staging_image.convert('RGBA')
+        if production_image.mode != 'RGBA':
+            production_image = production_image.convert('RGBA')
         
-        # Create a copy for modification
-        result = base_image.copy()
-        
-        # Create red overlay for differences
-        overlay = Image.new('RGBA', base_image.size, (255, 0, 0, 0))
-        overlay_draw = ImageDraw.Draw(overlay)
-        
-        # Apply red overlay where mask is white
+        # Convert to numpy arrays for pixel-level processing
+        staging_array = np.array(staging_image)
+        production_array = np.array(production_image)
         mask_array = np.array(mask)
-        overlay_array = np.array(overlay)
         
-        # Set red overlay with alpha where differences exist
-        red_mask = mask_array > 0
-        overlay_array[red_mask] = [255, 0, 0, self.config.overlay_alpha]
+        # Create result array starting with production image
+        result_array = production_array.copy().astype(np.float32)
         
-        overlay = Image.fromarray(overlay_array, 'RGBA')
+        # Create grayscale version of production image for unchanged areas
+        grayscale_array = np.array(production_image.convert('L'))
+        grayscale_rgba = np.stack([grayscale_array, grayscale_array, grayscale_array,
+                                  np.full_like(grayscale_array, 255)], axis=-1).astype(np.float32)
         
-        # Composite overlay onto base image
-        result = Image.alpha_composite(result, overlay)
+        # Apply grayscale dimming to unchanged areas (10-20% opacity)
+        unchanged_mask = mask_array == 0
+        dimming_factor = 0.15  # 15% opacity for unchanged areas
         
-        # Draw bounding box rectangles
-        draw = ImageDraw.Draw(result)
-        for bbox in bounding_boxes:
-            x, y, width, height = bbox
-            # Draw semi-transparent rectangle outline
-            draw.rectangle(
-                [x, y, x + width - 1, y + height - 1],
-                outline=(255, 0, 0, 200),
-                width=2
-            )
+        # Dim unchanged areas to grayscale
+        result_array[unchanged_mask] = (
+            grayscale_rgba[unchanged_mask] * dimming_factor +
+            result_array[unchanged_mask] * (1 - dimming_factor)
+        )
+        
+        # Highlight changed pixels with bright colors
+        changed_mask = mask_array > 0
+        
+        if np.any(changed_mask):
+            # Calculate pixel-level differences for intensity-based coloring
+            diff_intensity = np.sqrt(np.sum((staging_array.astype(np.float32) -
+                                           production_array.astype(np.float32))**2, axis=-1))
+            
+            # Normalize difference intensity
+            max_diff = np.max(diff_intensity[changed_mask]) if np.any(changed_mask) else 1
+            normalized_diff = diff_intensity / max_diff if max_diff > 0 else diff_intensity
+            
+            # Create color mapping for different intensities
+            # Red for high differences, orange for medium, yellow for low
+            highlight_colors = np.zeros_like(result_array)
+            
+            # High intensity differences (red)
+            high_intensity = (normalized_diff > 0.7) & changed_mask
+            highlight_colors[high_intensity] = [255, 0, 0, 255]  # Bright red
+            
+            # Medium intensity differences (orange)
+            medium_intensity = (normalized_diff > 0.4) & (normalized_diff <= 0.7) & changed_mask
+            highlight_colors[medium_intensity] = [255, 165, 0, 255]  # Orange
+            
+            # Low intensity differences (yellow)
+            low_intensity = (normalized_diff <= 0.4) & changed_mask
+            highlight_colors[low_intensity] = [255, 255, 0, 255]  # Yellow
+            
+            # Apply highlights with full opacity for changed pixels
+            result_array[changed_mask] = highlight_colors[changed_mask]
+        
+        # Convert back to uint8 and create image
+        result_array = np.clip(result_array, 0, 255).astype(np.uint8)
+        result = Image.fromarray(result_array, 'RGBA')
+        
+        # Add subtle bounding box outlines for major change regions
+        if bounding_boxes:
+            draw = ImageDraw.Draw(result)
+            for bbox in bounding_boxes:
+                x, y, width, height = bbox
+                area = width * height
+                
+                # Only draw boxes for significant regions
+                if area > self.config.min_diff_area * 4:
+                    # Use different colors based on region size
+                    if area > 10000:  # Large changes
+                        outline_color = (255, 0, 0, 180)  # Red
+                        line_width = 3
+                    elif area > 2500:  # Medium changes
+                        outline_color = (255, 165, 0, 160)  # Orange
+                        line_width = 2
+                    else:  # Small changes
+                        outline_color = (255, 255, 0, 140)  # Yellow
+                        line_width = 1
+                    
+                    draw.rectangle(
+                        [x, y, x + width - 1, y + height - 1],
+                        outline=outline_color,
+                        width=line_width
+                    )
         
         return result
     
@@ -305,37 +391,52 @@ class VisualDiffEngine:
         
         return True, ""
     
-    def get_diff_paths(self, project_id: int, page_path: str) -> Tuple[Path, Path]:
+    def get_diff_paths(self, project_id: int, page_path: str, viewport: str = None,
+                      process_timestamp: str = None) -> Tuple[Path, Path]:
         """
-        Get file paths for diff images
+        Get file paths for diff images using new structure
         
         Args:
             project_id: Project ID
             page_path: Page path for slugification
+            viewport: Viewport type (desktop, tablet, mobile) or None for legacy
+            process_timestamp: Process timestamp (YYYYMMDD-HHmmss) or None for legacy
             
         Returns:
             Tuple of (highlighted_diff_path, raw_diff_path)
         """
-        from screenshot.screenshot_service import ScreenshotService
-        
-        # Use same slugification as screenshot service
-        screenshot_service = ScreenshotService()
-        slug = screenshot_service.slugify_path(page_path)
-        
-        project_dir = Path(self.config.output_dir) / str(project_id)
-        project_dir.mkdir(parents=True, exist_ok=True)
-        
-        highlighted_path = project_dir / f"{slug}_diff.png"
-        raw_path = project_dir / f"{slug}_diff_raw.png"
-        
-        return highlighted_path, raw_path
+        if viewport and process_timestamp:
+            # New structure: use path manager
+            _, _, diff_path = self.path_manager.get_screenshot_paths(
+                project_id, process_timestamp, page_path, viewport
+            )
+            # For now, return same path for both highlighted and raw (can be extended later)
+            return diff_path, diff_path
+        else:
+            # Legacy structure
+            from screenshot.screenshot_service import ScreenshotService
+            
+            # Use same slugification as screenshot service
+            screenshot_service = ScreenshotService()
+            slug = screenshot_service.slugify_path(page_path)
+            
+            project_dir = Path(self.config.output_dir) / str(project_id)
+            project_dir.mkdir(parents=True, exist_ok=True)
+            
+            highlighted_path = project_dir / f"{slug}_diff.png"
+            raw_path = project_dir / f"{slug}_diff_raw.png"
+            
+            return highlighted_path, raw_path
     
-    def process_page_diff(self, page_id: int) -> bool:
+    def process_page_diff(self, page_id: int, viewport: str = 'desktop',
+                         process_timestamp: str = None) -> bool:
         """
         Process visual diff for a single page
         
         Args:
             page_id: ProjectPage ID
+            viewport: Viewport type (desktop, tablet, mobile)
+            process_timestamp: Process timestamp for new structure (None for legacy)
             
         Returns:
             True if successful, False otherwise
@@ -347,17 +448,23 @@ class VisualDiffEngine:
                 self.logger.error(f"Page {page_id} not found")
                 return False
             
-            # Check if screenshots exist
-            if not page.staging_screenshot_path or not page.production_screenshot_path:
-                self.logger.error(f"Missing screenshot paths for page {page_id}")
-                page.status = 'diff_failed'
-                page.diff_error = "Missing screenshot paths"
-                db.session.commit()
-                return False
-            
-            # Construct full paths to screenshots
-            staging_path = Path("screenshots") / page.staging_screenshot_path
-            production_path = Path("screenshots") / page.production_screenshot_path
+            if process_timestamp:
+                # New structure: get paths from path manager
+                production_path, staging_path, diff_path = self.path_manager.get_screenshot_paths(
+                    page.project_id, process_timestamp, page.path, viewport
+                )
+            else:
+                # Legacy structure: check if screenshots exist
+                if not page.staging_screenshot_path or not page.production_screenshot_path:
+                    self.logger.error(f"Missing screenshot paths for page {page_id}")
+                    page.status = 'diff_failed'
+                    page.diff_error = "Missing screenshot paths"
+                    db.session.commit()
+                    return False
+                
+                # Construct full paths to screenshots
+                staging_path = Path("screenshots") / page.staging_screenshot_path
+                production_path = Path("screenshots") / page.production_screenshot_path
             
             # Check if files exist
             if not staging_path.exists() or not production_path.exists():
@@ -367,7 +474,7 @@ class VisualDiffEngine:
                 db.session.commit()
                 return False
             
-            self.logger.info(f"Processing diff for page: {page.path}")
+            self.logger.info(f"Processing diff for page: {page.path} ({viewport} viewport)")
             
             # Load images
             staging_img = Image.open(staging_path)
@@ -385,30 +492,51 @@ class VisualDiffEngine:
             # Calculate metrics
             metrics = self.calculate_metrics(diff_mask, bounding_boxes)
             
-            # Create diff images
-            highlighted_diff = self.create_highlighted_diff(norm_production, diff_mask, bounding_boxes)
+            # Create diff images with enhanced highlighting
+            highlighted_diff = self.create_highlighted_diff(norm_staging, norm_production, diff_mask, bounding_boxes)
             raw_diff = self.create_raw_diff(diff_mask)
             
             # Get output paths
-            highlighted_path, raw_path = self.get_diff_paths(page.project_id, page.path)
+            if process_timestamp:
+                # New structure: save to diff path
+                highlighted_diff.save(diff_path, 'PNG')
+                # For now, save raw diff to same location (can be extended later)
+                raw_diff.save(diff_path, 'PNG')
+                
+                # Update database with relative path
+                relative_diff_path = self.path_manager.get_relative_path(diff_path)
+                setattr(page, f'diff_image_path_{viewport}', relative_diff_path)
+                setattr(page, f'diff_mismatch_pct_{viewport}', metrics['diff_mismatch_pct'])
+                setattr(page, f'diff_pixels_changed_{viewport}', metrics['diff_pixels_changed'])
+                
+                # Also update legacy fields for backward compatibility (use desktop as default)
+                if viewport == 'desktop':
+                    page.diff_image_path = relative_diff_path
+                    page.diff_mismatch_pct = metrics['diff_mismatch_pct']
+                    page.diff_pixels_changed = metrics['diff_pixels_changed']
+                    page.diff_bounding_boxes = metrics['diff_bounding_boxes']
+            else:
+                # Legacy structure
+                highlighted_path, raw_path = self.get_diff_paths(page.project_id, page.path)
+                
+                # Save images
+                highlighted_diff.save(highlighted_path, 'PNG')
+                raw_diff.save(raw_path, 'PNG')
+                
+                # Update database
+                page.diff_image_path = str(highlighted_path.relative_to(Path(self.config.output_dir)))
+                page.diff_raw_image_path = str(raw_path.relative_to(Path(self.config.output_dir)))
+                page.diff_mismatch_pct = metrics['diff_mismatch_pct']
+                page.diff_pixels_changed = metrics['diff_pixels_changed']
+                page.diff_bounding_boxes = metrics['diff_bounding_boxes']
             
-            # Save images
-            highlighted_diff.save(highlighted_path, 'PNG')
-            raw_diff.save(raw_path, 'PNG')
-            
-            # Update database
-            page.diff_image_path = str(highlighted_path.relative_to(Path(self.config.output_dir)))
-            page.diff_raw_image_path = str(raw_path.relative_to(Path(self.config.output_dir)))
-            page.diff_mismatch_pct = metrics['diff_mismatch_pct']
-            page.diff_pixels_changed = metrics['diff_pixels_changed']
-            page.diff_bounding_boxes = metrics['diff_bounding_boxes']
             page.diff_generated_at = datetime.utcnow()
             page.diff_error = None
             page.status = 'diff_generated'
             
             db.session.commit()
             
-            self.logger.info(f"Successfully generated diff for page: {page.path} "
+            self.logger.info(f"Successfully generated diff for page: {page.path} ({viewport} viewport) "
                            f"({metrics['diff_mismatch_pct']}% changed, {len(bounding_boxes)} regions)")
             
             return True
@@ -425,8 +553,9 @@ class VisualDiffEngine:
                 db.session.rollback()
             return False
     
-    def process_project_diffs(self, project_id: int, page_ids: Optional[List[int]] = None, 
-                            retry_failed: bool = False, scheduler=None) -> Tuple[int, int]:
+    def process_project_diffs(self, project_id: int, page_ids: Optional[List[int]] = None,
+                            retry_failed: bool = False, scheduler=None,
+                            process_timestamp: str = None, viewports: List[str] = None) -> Tuple[int, int]:
         """
         Process visual diffs for all pages in a project
         
@@ -435,11 +564,21 @@ class VisualDiffEngine:
             page_ids: Optional list of specific page IDs to process
             retry_failed: Whether to retry previously failed pages
             scheduler: Optional scheduler for job control
+            process_timestamp: Process timestamp for new structure (None for legacy)
+            viewports: List of viewports to process (default: all)
             
         Returns:
             Tuple of (successful_count, failed_count)
         """
         try:
+            # Default viewports
+            if viewports is None:
+                viewports = ['desktop', 'tablet', 'mobile']
+            
+            # Generate process timestamp if not provided
+            if process_timestamp is None:
+                process_timestamp = self.path_manager.generate_process_timestamp()
+            
             # Build query for pages to process
             query = ProjectPage.query.filter_by(project_id=project_id)
             
@@ -458,7 +597,7 @@ class VisualDiffEngine:
                 self.logger.info(f"No pages to process for project {project_id}")
                 return (0, 0)
             
-            self.logger.info(f"Starting diff generation for {len(pages)} pages in project {project_id}")
+            self.logger.info(f"Starting diff generation for {len(pages)} pages in project {project_id} (timestamp: {process_timestamp})")
             
             successful_count = 0
             failed_count = 0
@@ -490,10 +629,14 @@ class VisualDiffEngine:
                     page.status = 'diff_running'
                     db.session.commit()
                     
-                    # Process the diff
-                    success = self.process_page_diff(page.id)
+                    # Process diffs for all viewports
+                    page_success = True
+                    for viewport in viewports:
+                        success = self.process_page_diff(page.id, viewport, process_timestamp)
+                        if not success:
+                            page_success = False
                     
-                    if success:
+                    if page_success:
                         successful_count += 1
                     else:
                         failed_count += 1
