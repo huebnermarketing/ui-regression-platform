@@ -86,9 +86,14 @@ class ProjectPage(db.Model):
     # Timestamped run support
     current_run_id = db.Column(db.String(20), nullable=True)  # Current run ID (YYYYMMDD-HHmmss format)
     baseline_run_id = db.Column(db.String(20), nullable=True)  # Baseline run ID for comparison
-    find_diff_status = db.Column(db.Enum('pending', 'capturing', 'captured', 'diffing', 'completed', 'failed', 'no_baseline', name='find_diff_status'),
+    find_diff_status = db.Column(db.Enum('pending', 'capturing', 'captured', 'diffing', 'finding_difference', 'ready', 'completed', 'failed', 'no_baseline', name='find_diff_status'),
                                 default='pending', nullable=False)
     last_run_at = db.Column(db.DateTime, nullable=True)  # When last run was executed
+    
+    # Per-page duration tracking (time taken for screenshot capture + diff generation)
+    duration = db.Column(db.Numeric(8, 3), nullable=True)  # Duration in seconds with millisecond precision
+    processing_started_at = db.Column(db.DateTime, nullable=True)  # When processing started for this page
+    processing_completed_at = db.Column(db.DateTime, nullable=True)  # When processing completed for this page
     
     # Multi-viewport diff status tracking
     diff_status_desktop = db.Column(db.Enum('pending', 'processing', 'completed', 'failed', 'no_baseline', name='diff_status_desktop'),
@@ -113,6 +118,54 @@ class ProjectPage(db.Model):
         self.production_url = production_url
         self.page_name = page_name
         self.last_crawled = datetime.utcnow()
+    
+    def start_processing(self):
+        """Mark the start of processing (screenshot capture + diff generation) for this page"""
+        self.processing_started_at = datetime.utcnow()
+        self.find_diff_status = 'capturing'
+    
+    def complete_processing(self):
+        """Mark the completion of processing and calculate duration"""
+        if self.processing_started_at:
+            self.processing_completed_at = datetime.utcnow()
+            # Calculate duration in seconds with millisecond precision
+            duration_seconds = (self.processing_completed_at - self.processing_started_at).total_seconds()
+            self.duration = round(duration_seconds, 3)
+        self.find_diff_status = 'completed'
+    
+    def fail_processing(self, error_message=None):
+        """Mark processing as failed and calculate partial duration if started"""
+        if self.processing_started_at:
+            self.processing_completed_at = datetime.utcnow()
+            # Calculate duration even for failed processing
+            duration_seconds = (self.processing_completed_at - self.processing_started_at).total_seconds()
+            self.duration = round(duration_seconds, 3)
+        self.find_diff_status = 'failed'
+    
+    @property
+    def duration_formatted(self):
+        """Get formatted duration string for display"""
+        if self.duration is None:
+            return "N/A"
+        
+        duration_float = float(self.duration)
+        
+        if duration_float < 1:
+            # Show milliseconds for very fast operations
+            return f"{int(duration_float * 1000)}ms"
+        elif duration_float < 60:
+            # Show seconds with 1 decimal place
+            return f"{duration_float:.1f}s"
+        elif duration_float < 3600:
+            # Show minutes and seconds
+            minutes = int(duration_float // 60)
+            seconds = int(duration_float % 60)
+            return f"{minutes}m {seconds}s"
+        else:
+            # Show hours and minutes
+            hours = int(duration_float // 3600)
+            minutes = int((duration_float % 3600) // 60)
+            return f"{hours}h {minutes}m"
     
     def __repr__(self):
         return f'<ProjectPage {self.path} - {self.page_name or "No Title"}>'

@@ -21,11 +21,10 @@ def register_history_routes(app):
             if not project:
                 return jsonify({'error': 'Project not found'}), 404
             
-            # Get all completed crawl jobs for this project
+            # Get all completed crawl jobs for this project (including ready and diff_failed)
             completed_jobs = CrawlJob.query.filter_by(
-                project_id=project_id,
-                status='completed'
-            ).order_by(CrawlJob.completed_at.desc()).all()
+                project_id=project_id
+            ).filter(CrawlJob.status.in_(['Crawled', 'ready', 'diff_failed', 'completed'])).order_by(CrawlJob.completed_at.desc()).all()
             
             # Get unique process runs from the file system using PathResolver
             path_resolver = PathResolver()
@@ -268,11 +267,10 @@ def register_history_routes(app):
             if not project:
                 return jsonify({'success': False, 'error': 'Project not found'}), 404
             
-            # Get all completed crawl jobs for this project
+            # Get all completed crawl jobs for this project (including ready and diff_failed)
             completed_jobs = CrawlJob.query.filter_by(
-                project_id=project_id,
-                status='completed'
-            ).order_by(CrawlJob.completed_at.desc()).all()
+                project_id=project_id
+            ).filter(CrawlJob.status.in_(['Crawled', 'ready', 'diff_failed', 'completed'])).order_by(CrawlJob.completed_at.desc()).all()
             
             # Get unique process runs from the file system using PathResolver
             path_resolver = PathResolver()
@@ -326,7 +324,7 @@ def register_history_routes(app):
     @app.route('/api/history/project/<int:project_id>/run/<timestamp>/pages')
     @login_required
     def get_run_pages_for_history(project_id, timestamp):
-        """Get all pages for a specific run (for history modal) with proper grouping and pagination"""
+        """Get all pages for a specific run (for history modal) with proper grouping, pagination, duration, and results data"""
         try:
             # Verify project ownership
             project = Project.query.filter_by(id=project_id, user_id=current_user.id).first()
@@ -340,6 +338,76 @@ def register_history_routes(app):
                 run_datetime_ist = ist.localize(run_datetime)
             except ValueError:
                 return jsonify({'success': False, 'error': 'Invalid timestamp format'}), 400
+            
+            # Get corresponding CrawlJob for duration calculation and status information
+            from models.crawl_job import CrawlJob
+            
+            job = None
+            duration_seconds = None
+            duration_formatted = "N/A"
+            job_status = "unknown"
+            
+            # Ensure run_datetime_ist is timezone-aware
+            if run_datetime_ist.tzinfo is None:
+                ist_tz = pytz.timezone('Asia/Kolkata')
+                run_datetime_ist = ist_tz.localize(run_datetime_ist)
+            
+            # Find job by matching timestamp with completion times (within 1 hour tolerance)
+            jobs = CrawlJob.query.filter_by(project_id=project_id).all()
+            for candidate_job in jobs:
+                job_timestamps = [
+                    candidate_job.crawl_completed_at,
+                    candidate_job.completed_at,
+                    candidate_job.fd_completed_at,
+                    candidate_job.updated_at
+                ]
+                
+                for job_timestamp in job_timestamps:
+                    if job_timestamp:
+                        # Ensure job_timestamp is timezone-aware
+                        if job_timestamp.tzinfo is None:
+                            ist_tz = pytz.timezone('Asia/Kolkata')
+                            job_timestamp = ist_tz.localize(job_timestamp)
+                        
+                        # Convert both to UTC for comparison
+                        job_timestamp_utc = job_timestamp.astimezone(pytz.UTC)
+                        run_datetime_utc = run_datetime_ist.astimezone(pytz.UTC)
+                        
+                        if abs((job_timestamp_utc - run_datetime_utc).total_seconds()) < 3600:
+                            job = candidate_job
+                            break
+                
+                if job:
+                    break
+            
+            # Calculate duration and get job status if job found
+            if job:
+                job_status = job.status
+                start_time = job.crawl_started_at or job.started_at
+                end_time = job.crawl_completed_at or job.completed_at or job.fd_completed_at
+                
+                if start_time and end_time:
+                    # Ensure both timestamps are timezone-aware for duration calculation
+                    if start_time.tzinfo is None:
+                        ist_tz = pytz.timezone('Asia/Kolkata')
+                        start_time = ist_tz.localize(start_time)
+                    if end_time.tzinfo is None:
+                        ist_tz = pytz.timezone('Asia/Kolkata')
+                        end_time = ist_tz.localize(end_time)
+                    
+                    duration_seconds = int((end_time - start_time).total_seconds())
+                    
+                    # Format duration as human-readable
+                    if duration_seconds < 60:
+                        duration_formatted = f"{duration_seconds}s"
+                    elif duration_seconds < 3600:
+                        minutes = duration_seconds // 60
+                        seconds = duration_seconds % 60
+                        duration_formatted = f"{minutes}m {seconds}s"
+                    else:
+                        hours = duration_seconds // 3600
+                        minutes = (duration_seconds % 3600) // 60
+                        duration_formatted = f"{hours}h {minutes}m"
             
             # Get pagination parameters
             page = request.args.get('page', 1, type=int)
@@ -365,13 +433,18 @@ def register_history_routes(app):
                         'path': db_page.path,
                         'page_name': db_page.page_name or 'Untitled Page',
                         'staging_url': db_page.staging_url,
+                        'production_url': db_page.production_url,
                         'last_run_at': run_datetime_ist.strftime('%Y-%m-%d %H:%M:%S'),
                         'diff_status_desktop': db_page.diff_status_desktop or 'pending',
                         'diff_status_tablet': db_page.diff_status_tablet or 'pending',
                         'diff_status_mobile': db_page.diff_status_mobile or 'pending',
                         'diff_mismatch_pct_desktop': db_page.diff_mismatch_pct_desktop or 0.0,
                         'diff_mismatch_pct_tablet': db_page.diff_mismatch_pct_tablet or 0.0,
-                        'diff_mismatch_pct_mobile': db_page.diff_mismatch_pct_mobile or 0.0
+                        'diff_mismatch_pct_mobile': db_page.diff_mismatch_pct_mobile or 0.0,
+                        'duration': duration_formatted,
+                        'job_number': job.job_number if job else 'N/A',
+                        'job_status': job_status,
+                        'has_screenshots': False  # No filesystem data available
                     }
                 
                 # Convert to list and apply pagination
@@ -391,6 +464,9 @@ def register_history_routes(app):
                 return jsonify({
                     'success': True,
                     'pages': paginated_pages,
+                    'duration': duration_formatted,
+                    'job_number': job.job_number if job else 'N/A',
+                    'job_status': job_status,
                     'pagination': {
                         'page': page,
                         'per_page': per_page,
@@ -466,13 +542,17 @@ def register_history_routes(app):
                                 'path': actual_path,
                                 'page_name': page_name or 'Untitled Page',
                                 'staging_url': matching_page.staging_url if matching_page else None,
+                                'production_url': matching_page.production_url if matching_page else None,
                                 'last_run_at': run_datetime_ist.strftime('%Y-%m-%d %H:%M:%S'),
                                 'diff_status_desktop': 'pending',
                                 'diff_status_tablet': 'pending',
                                 'diff_status_mobile': 'pending',
                                 'diff_mismatch_pct_desktop': None,
                                 'diff_mismatch_pct_tablet': None,
-                                'diff_mismatch_pct_mobile': None
+                                'diff_mismatch_pct_mobile': None,
+                                'duration': duration_formatted,
+                                'job_number': job.job_number if job else 'N/A',
+                                'has_screenshots': True  # Filesystem data available
                             }
                         
                         # Update viewport-specific data
@@ -516,6 +596,9 @@ def register_history_routes(app):
             return jsonify({
                 'success': True,
                 'pages': paginated_pages,
+                'duration': duration_formatted,
+                'job_number': job.job_number if job else 'N/A',
+                'job_status': job_status,
                 'pagination': {
                     'page': page,
                     'per_page': per_page,

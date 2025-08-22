@@ -6,7 +6,7 @@ class CrawlJob(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
-    status = db.Column(db.Enum('pending', 'Crawling', 'Crawled', 'Job Failed', name='crawl_job_status'),
+    status = db.Column(db.Enum('pending', 'Crawling', 'Crawled', 'Job Failed', 'finding_difference', 'ready', 'diff_failed', name='crawl_job_status'),
                       default='pending', nullable=False)
     job_number = db.Column(db.Integer, nullable=False)  # Incremental per project
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -16,6 +16,12 @@ class CrawlJob(db.Model):
     completed_at = db.Column(db.DateTime, nullable=True)
     error_message = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Phase-specific timestamps for run tracking
+    crawl_started_at = db.Column(db.DateTime, nullable=True)
+    crawl_completed_at = db.Column(db.DateTime, nullable=True)
+    fd_started_at = db.Column(db.DateTime, nullable=True)  # Find Difference started
+    fd_completed_at = db.Column(db.DateTime, nullable=True)  # Find Difference completed
     
     # Relationship to project
     project = db.relationship('Project', backref=db.backref('crawl_jobs', lazy=True, cascade='all, delete-orphan'))
@@ -38,8 +44,10 @@ class CrawlJob(db.Model):
     def start_job(self):
         """Mark job as Crawling and set started_at timestamp"""
         self.status = 'Crawling'
-        self.started_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        current_time = datetime.utcnow()
+        self.started_at = current_time
+        self.crawl_started_at = current_time  # Track crawl phase start
+        self.updated_at = current_time
     
     def start(self):
         """Alias for start_job for API compatibility"""
@@ -59,6 +67,7 @@ class CrawlJob(db.Model):
             UPDATE crawl_jobs
             SET status='Crawled',
                 completed_at=:completion_time,
+                crawl_completed_at=:completion_time,
                 updated_at=:completion_time,
                 total_pages=:total_pages,
                 error_message=NULL
@@ -73,6 +82,7 @@ class CrawlJob(db.Model):
             # Update local object to reflect database changes
             self.status = 'Crawled'
             self.completed_at = completion_time
+            self.crawl_completed_at = completion_time  # Track crawl phase completion
             self.updated_at = completion_time
             self.total_pages = total_pages
             self.error_message = None
@@ -97,61 +107,39 @@ class CrawlJob(db.Model):
         """Mark job as paused"""
         self.status = 'paused'
     
-    @property
-    def duration(self):
-        """Calculate duration of the job in seconds using UTC epoch time"""
-        if not self.started_at:
-            return None
+    def start_find_difference(self):
+        """Start Find Difference phase - transition from Crawled to finding_difference"""
+        if self.status != 'Crawled':
+            raise ValueError(f"Cannot start Find Difference from status '{self.status}'. Must be 'Crawled'.")
         
-        # Convert started_at to UTC epoch seconds (always treat as UTC)
-        # This avoids timezone confusion by working with raw epoch time
-        if self.started_at.tzinfo is None:
-            # Assume naive datetime is already in UTC
-            started_epoch = self.started_at.timestamp()
-        else:
-            # Convert timezone-aware datetime to UTC epoch
-            started_epoch = self.started_at.timestamp()
-        
-        # Determine end time epoch
-        if self.completed_at:
-            # Job is completed/failed - use completed_at
-            if self.completed_at.tzinfo is None:
-                # Assume naive datetime is already in UTC
-                end_epoch = self.completed_at.timestamp()
-            else:
-                # Convert timezone-aware datetime to UTC epoch
-                end_epoch = self.completed_at.timestamp()
-        elif self.status == 'Crawling':
-            # Job is still running, use current UTC time
-            import time
-            end_epoch = time.time()
-        else:
-            # Job is pending/paused and not completed
-            return None
-        
-        # Calculate duration in seconds using epoch time difference
-        duration_seconds = end_epoch - started_epoch
-        
-        # Ensure duration is not negative (can happen with clock skew)
-        return max(0, duration_seconds)
+        current_time = datetime.utcnow()
+        self.status = 'finding_difference'
+        self.fd_started_at = current_time
+        self.updated_at = current_time
     
-    @property
-    def duration_formatted(self):
-        """Get formatted duration string"""
-        duration = self.duration
-        if duration is None:
-            return "N/A"
+    def complete_find_difference(self):
+        """Complete Find Difference phase - transition from finding_difference to ready"""
+        if self.status != 'finding_difference':
+            raise ValueError(f"Cannot complete Find Difference from status '{self.status}'. Must be 'finding_difference'.")
         
-        if duration < 60:
-            return f"{int(duration)}s"
-        elif duration < 3600:
-            minutes = int(duration // 60)
-            seconds = int(duration % 60)
-            return f"{minutes}m {seconds}s"
-        else:
-            hours = int(duration // 3600)
-            minutes = int((duration % 3600) // 60)
-            return f"{hours}h {minutes}m"
+        current_time = datetime.utcnow()
+        self.status = 'ready'
+        self.fd_completed_at = current_time
+        self.completed_at = current_time  # Overall job completion
+        self.updated_at = current_time
+    
+    def fail_find_difference(self, error_message):
+        """Fail Find Difference phase - transition to diff_failed"""
+        current_time = datetime.utcnow()
+        self.status = 'diff_failed'
+        self.fd_completed_at = current_time
+        self.completed_at = current_time
+        self.updated_at = current_time
+        self.error_message = error_message
+    
+    # Duration properties removed - now tracking per-page duration instead of job duration
+    
+    # duration_formatted property removed - now tracking per-page duration instead
     
     def __repr__(self):
         return f'<CrawlJob {self.id} - Project {self.project_id} - {self.status}>'

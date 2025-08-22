@@ -460,7 +460,7 @@ class FindDifferenceService:
     async def run_find_difference(self, project_id: int, page_ids: List[int] = None,
                                 scheduler=None) -> Tuple[int, int, str]:
         """
-        Execute the complete Find Difference workflow
+        Execute the complete Find Difference workflow with improved error handling
         
         Args:
             project_id: Project ID
@@ -474,6 +474,11 @@ class FindDifferenceService:
         run_id = self.generate_run_id()
         
         self.logger.info(f"Starting Find Difference workflow for project {project_id} (run: {run_id})")
+        
+        # Add workflow timeout protection (30 minutes max)
+        import asyncio
+        workflow_start_time = datetime.now(timezone.utc)
+        max_workflow_duration = 30 * 60  # 30 minutes in seconds
         
         # Get pages to process
         if page_ids:
@@ -493,6 +498,13 @@ class FindDifferenceService:
         
         for i, page in enumerate(pages, 1):
             try:
+                # Check for workflow timeout
+                current_time = datetime.now(timezone.utc)
+                elapsed_seconds = (current_time - workflow_start_time).total_seconds()
+                if elapsed_seconds > max_workflow_duration:
+                    self.logger.error(f"Find Difference workflow timed out after {elapsed_seconds:.1f} seconds for project {project_id}")
+                    raise TimeoutError(f"Workflow exceeded maximum duration of {max_workflow_duration} seconds")
+                
                 # Check for stop signal
                 if scheduler and hasattr(scheduler, '_should_stop') and scheduler._should_stop(project_id):
                     self.logger.info(f"Find Difference stopped by user signal for project {project_id}")
@@ -504,31 +516,59 @@ class FindDifferenceService:
                         self.logger.info(f"Find Difference paused for project {project_id}")
                         await asyncio.sleep(1)
                         
+                        # Check timeout even while paused
+                        current_time = datetime.now(timezone.utc)
+                        elapsed_seconds = (current_time - workflow_start_time).total_seconds()
+                        if elapsed_seconds > max_workflow_duration:
+                            self.logger.error(f"Find Difference workflow timed out while paused for project {project_id}")
+                            raise TimeoutError(f"Workflow exceeded maximum duration of {max_workflow_duration} seconds")
+                        
                         if scheduler._should_stop(project_id):
                             self.logger.info(f"Find Difference stopped while paused for project {project_id}")
                             return (successful_count, failed_count, run_id)
                 
                 self.logger.info(f"Processing page {i}/{len(pages)}: {page.path}")
                 
-                # Update page status
-                page.find_diff_status = 'capturing'
+                # Start processing timer for this page with timeout protection
+                page_start_time = datetime.now(timezone.utc)
+                page.start_processing()
                 page.current_run_id = run_id
-                page.last_run_at = datetime.now(timezone.utc)
+                page.last_run_at = page_start_time
                 db.session.commit()
                 
-                self.logger.info(f"Status: Capturing screenshots for {page.path}")
+                # Set per-page timeout (5 minutes max per page)
+                page_timeout = 5 * 60  # 5 minutes in seconds
                 
-                # Step 1: Capture screenshots for all viewports
-                screenshot_results = await self.capture_page_screenshots_for_run(
-                    page.id, run_id, self.viewport_order
-                )
+                try:
+                    self.logger.info(f"Status: Capturing screenshots for {page.path}")
+                    
+                    # Step 1: Capture screenshots for all viewports with timeout
+                    screenshot_task = asyncio.create_task(
+                        self.capture_page_screenshots_for_run(page.id, run_id, self.viewport_order)
+                    )
+                    
+                    try:
+                        screenshot_results = await asyncio.wait_for(screenshot_task, timeout=page_timeout)
+                    except asyncio.TimeoutError:
+                        self.logger.error(f"Screenshot capture timed out for page: {page.path}")
+                        page.fail_processing(f"Screenshot capture timed out after {page_timeout} seconds")
+                        db.session.commit()
+                        failed_count += 1
+                        continue
+                    
+                    # Check if all screenshots were captured successfully
+                    all_screenshots_success = all(screenshot_results.values())
+                    
+                    if not all_screenshots_success:
+                        self.logger.error(f"Failed to capture screenshots for page: {page.path}")
+                        page.fail_processing("Failed to capture screenshots")
+                        db.session.commit()
+                        failed_count += 1
+                        continue
                 
-                # Check if all screenshots were captured successfully
-                all_screenshots_success = all(screenshot_results.values())
-                
-                if not all_screenshots_success:
-                    self.logger.error(f"Failed to capture screenshots for page: {page.path}")
-                    page.find_diff_status = 'failed'
+                except Exception as page_error:
+                    self.logger.error(f"Error during screenshot capture for page {page.path}: {str(page_error)}")
+                    page.fail_processing(f"Screenshot error: {str(page_error)}")
                     db.session.commit()
                     failed_count += 1
                     continue
@@ -537,15 +577,36 @@ class FindDifferenceService:
                 page.find_diff_status = 'captured'
                 db.session.commit()
                 
-                self.logger.info(f"Status: Generating diffs for {page.path}")
+                try:
+                    self.logger.info(f"Status: Generating diffs for {page.path}")
+                    
+                    # Step 2: Generate diffs for all viewports with timeout
+                    page.find_diff_status = 'diffing'
+                    db.session.commit()
+                    
+                    # Generate diffs with timeout protection
+                    diff_task = asyncio.create_task(
+                        asyncio.to_thread(
+                            self.generate_page_diffs_for_run,
+                            page.id, run_id, page.baseline_run_id, self.viewport_order
+                        )
+                    )
+                    
+                    try:
+                        diff_results = await asyncio.wait_for(diff_task, timeout=page_timeout)
+                    except asyncio.TimeoutError:
+                        self.logger.error(f"Diff generation timed out for page: {page.path}")
+                        page.fail_processing(f"Diff generation timed out after {page_timeout} seconds")
+                        db.session.commit()
+                        failed_count += 1
+                        continue
                 
-                # Step 2: Generate diffs for all viewports
-                page.find_diff_status = 'diffing'
-                db.session.commit()
-                
-                diff_results = self.generate_page_diffs_for_run(
-                    page.id, run_id, page.baseline_run_id, self.viewport_order
-                )
+                except Exception as diff_error:
+                    self.logger.error(f"Error during diff generation for page {page.path}: {str(diff_error)}")
+                    page.fail_processing(f"Diff generation error: {str(diff_error)}")
+                    db.session.commit()
+                    failed_count += 1
+                    continue
                 
                 # Update diff status per viewport
                 for viewport in self.viewport_order:
@@ -596,15 +657,15 @@ class FindDifferenceService:
                 )
                 
                 if all_diffs_success:
-                    page.find_diff_status = 'completed'
+                    page.complete_processing()
                     # No need to set baseline - we always compare staging vs production
                     successful_count += 1
-                    self.logger.info(f"Status: Completed processing {page.path} "
+                    self.logger.info(f"Status: Completed processing {page.path} in {page.duration_formatted} "
                                    f"({'changes detected' if has_actual_changes else 'no changes'})")
                 else:
-                    page.find_diff_status = 'failed'
+                    page.fail_processing("Failed to generate diffs")
                     failed_count += 1
-                    self.logger.error(f"Status: Failed processing {page.path}")
+                    self.logger.error(f"Status: Failed processing {page.path} after {page.duration_formatted}")
                 
                 db.session.commit()
                 
@@ -613,7 +674,7 @@ class FindDifferenceService:
                 
             except Exception as e:
                 self.logger.error(f"Error processing page {page.id}: {str(e)}")
-                page.find_diff_status = 'failed'
+                page.fail_processing(f"Exception: {str(e)}")
                 db.session.commit()
                 failed_count += 1
         

@@ -586,13 +586,22 @@ class WorkingCrawlerScheduler:
     def schedule_crawl(self, project_id):
         """Start a crawl job in a background thread"""
         if project_id in self.running_jobs:
-            return  # Job already running
+            return None  # Job already running
         
-        # Create crawl job record
+        # Find existing pending job or create one if none exists
         with self.app.app_context():
-            crawl_job = CrawlJob(project_id=project_id)
-            db.session.add(crawl_job)
-            db.session.commit()
+            # Look for existing pending job first
+            crawl_job = CrawlJob.query.filter_by(
+                project_id=project_id,
+                status='pending'
+            ).order_by(CrawlJob.created_at.desc()).first()
+            
+            if not crawl_job:
+                # No pending job found, create a new one
+                crawl_job = CrawlJob(project_id=project_id)
+                db.session.add(crawl_job)
+                db.session.commit()
+            
             job_id = crawl_job.id
         
         # Start crawl in background thread
@@ -1729,24 +1738,252 @@ class WorkingCrawlerScheduler:
             'progress': 0,
             'message': 'No progress information available'
         })
+    
+    def schedule_find_difference_for_job(self, job_id, page_ids=None):
+        """
+        Schedule a find difference job for a specific CrawlJob (phase-based workflow)
+        
+        Args:
+            job_id (int): ID of the CrawlJob to advance through phases
+            page_ids (list): Optional list of page IDs to process
+        """
+        # Get the project_id from the job
+        with self.app.app_context():
+            from models.crawl_job import CrawlJob
+            crawl_job = CrawlJob.query.get(job_id)
+            if not crawl_job:
+                print(f"CrawlJob {job_id} not found")
+                return None
+            
+            project_id = crawl_job.project_id
+        
+        # Check if there's already a find difference job running for this project
+        if project_id in self.running_jobs:
+            job_info = self.running_jobs[project_id]
+            if job_info.get('job_type') == 'find_difference':
+                print(f"Find difference job already running for project {project_id}")
+                return None
+        
+        # Create crawl job record for Find Difference (reuse existing job)
+        with self.app.app_context():
+            # Update the existing job to find_difference type
+            crawl_job.job_type = 'find_difference'
+            db.session.commit()
+            
+            # Use the existing job_id
+            existing_job_id = job_id
+        
+        # Start Find Difference in background thread
+        thread = threading.Thread(target=self._find_difference_for_job, args=[existing_job_id, page_ids])
+        thread.daemon = True
+        thread.start()
+        
+        # Store job information with control flags
+        self.running_jobs[project_id] = {
+            'job_id': existing_job_id,
+            'thread': thread,
+            'should_stop': False,
+            'should_pause': False,
+            'job_type': 'find_difference'
+        }
+        
+        return existing_job_id
+    
+    def _find_difference_for_job(self, job_id, page_ids=None):
+        """
+        Background job to find differences for a specific CrawlJob (phase-based workflow)
+        
+        Args:
+            job_id (int): ID of the CrawlJob to advance through phases
+            page_ids (list): Optional list of page IDs to process
+        """
+        crawl_job = None
+        project_id = None
+        try:
+            with self.app.app_context():
+                print(f"Starting find difference for job {job_id}")
+                
+                # Get the crawl job from database
+                from models.crawl_job import CrawlJob
+                crawl_job = CrawlJob.query.get(job_id)
+                if not crawl_job:
+                    print(f"CrawlJob {job_id} not found")
+                    return
+                
+                project_id = crawl_job.project_id
+                
+                if crawl_job.status != 'finding_difference':
+                    print(f"CrawlJob {job_id} is not in 'finding_difference' status (current: {crawl_job.status})")
+                    return
+                
+                # Initialize progress tracking
+                self.progress_info[project_id] = {
+                    'stage': 'initializing',
+                    'progress': 0,
+                    'message': 'Initializing Find Difference workflow...',
+                    'job_id': job_id,
+                    'job_type': 'find_difference'
+                }
+                
+                # Get project from database
+                from models.project import Project
+                project = Project.query.get(crawl_job.project_id)
+                if not project:
+                    print(f"Project {crawl_job.project_id} not found")
+                    crawl_job.fail_find_difference("Project not found")
+                    db.session.commit()
+                    return
+                
+                # Check for stop signal before starting
+                if self._should_stop(project_id):
+                    crawl_job.fail_find_difference("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Update progress
+                self.progress_info[project_id].update({
+                    'stage': 'processing',
+                    'progress': 20,
+                    'message': 'Capturing screenshots and generating diffs...'
+                })
+                
+                # Check for stop signal
+                if self._should_stop(project_id):
+                    crawl_job.fail_find_difference("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Import find difference service
+                from services.find_difference_service import FindDifferenceService
+                find_diff_service = FindDifferenceService()
+                
+                # Update progress
+                self.progress_info[project_id].update({
+                    'stage': 'processing',
+                    'progress': 40,
+                    'message': 'Running find difference workflow...'
+                })
+                
+                # Check for stop signal
+                if self._should_stop(project_id):
+                    crawl_job.fail_find_difference("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Run find difference for specified or all pages
+                import asyncio
+                successful_count, failed_count, run_id = asyncio.run(
+                    find_diff_service.run_find_difference(crawl_job.project_id, page_ids, self)
+                )
+                
+                # Check for stop signal
+                if self._should_stop(project_id):
+                    crawl_job.fail_find_difference("Job stopped by user")
+                    db.session.commit()
+                    return
+                
+                # Update progress
+                self.progress_info[project_id].update({
+                    'stage': 'completing',
+                    'progress': 90,
+                    'message': f'Finalizing results... Successful: {successful_count}, Failed: {failed_count}'
+                })
+                
+                # PHASE TRANSITION: Finding Difference → Ready (or diff_failed)
+                if failed_count == 0:
+                    crawl_job.complete_find_difference()
+                    print(f"CrawlJob {job_id} completed find difference phase successfully")
+                    
+                    # Final progress update
+                    self.progress_info[project_id].update({
+                        'stage': 'completed',
+                        'progress': 100,
+                        'message': f'Find Difference completed! Run ID: {run_id}, Successful: {successful_count}, Status: Ready'
+                    })
+                else:
+                    error_msg = f"Find difference completed with {failed_count} failures out of {successful_count + failed_count} pages"
+                    if successful_count == 0:
+                        # Complete failure
+                        crawl_job.fail_find_difference(error_msg)
+                        print(f"CrawlJob {job_id} failed find difference phase: {error_msg}")
+                        
+                        self.progress_info[project_id].update({
+                            'stage': 'error',
+                            'progress': 0,
+                            'message': f'Find Difference failed: {error_msg}'
+                        })
+                    else:
+                        # Partial success - still mark as ready but log the issues
+                        crawl_job.complete_find_difference()
+                        print(f"CrawlJob {job_id} completed find difference with partial failures: {error_msg}")
+                        
+                        self.progress_info[project_id].update({
+                            'stage': 'completed',
+                            'progress': 100,
+                            'message': f'Find Difference completed with warnings! Run ID: {run_id}, Successful: {successful_count}, Failed: {failed_count}, Status: Ready'
+                        })
+                
+                db.session.commit()
+                
+                print(f"Find difference for job {job_id} completed. "
+                      f"Successful: {successful_count}, Failed: {failed_count}, Run ID: {run_id}, "
+                      f"Final Status: {crawl_job.status}")
+                
+        except Exception as e:
+            print(f"Error in find difference for job {job_id}: {str(e)}")
+            
+            if project_id:
+                self.progress_info[project_id] = {
+                    'stage': 'error',
+                    'progress': 0,
+                    'message': f'Error: {str(e)}',
+                    'job_id': job_id,
+                    'job_type': 'find_difference'
+                }
+            
+            with self.app.app_context():
+                # PHASE TRANSITION: Finding Difference → diff_failed
+                if crawl_job:
+                    crawl_job.fail_find_difference(str(e))
+                    try:
+                        db.session.commit()
+                    except:
+                        db.session.rollback()
+                else:
+                    db.session.rollback()
+        finally:
+            # Clean up progress info and running jobs
+            if project_id:
+                # Remove from running jobs after job completion with proper delay
+                def cleanup():
+                    time.sleep(5)  # Wait 5 seconds before cleanup to avoid race conditions
+                    if project_id in self.running_jobs:
+                        del self.running_jobs[project_id]
+                        print(f"Removed find difference job {job_id} from running jobs for project {project_id}")
+                    if project_id in self.progress_info:
+                        del self.progress_info[project_id]
+                
+                cleanup_thread = threading.Thread(target=cleanup)
+                cleanup_thread.daemon = True
+                cleanup_thread.start()
 
 crawler_scheduler = WorkingCrawlerScheduler(app)
 
 # Import and register routes after all initializations
 from auth.routes import register_routes
 from projects.routes import register_project_routes
-from crawl_queue.routes import register_crawl_queue_routes
 from history.routes import register_history_routes
 from routes.asset_resolver import register_asset_resolver_routes
 from routes.run_state_routes import register_run_state_routes
 from settings.routes import settings_bp
+from analytics.routes import register_analytics_routes
 
 register_routes(app)
 register_project_routes(app, crawler_scheduler)
-register_crawl_queue_routes(app, crawler_scheduler)
 register_history_routes(app)
 register_asset_resolver_routes(app)
 register_run_state_routes(app, crawler_scheduler)
+register_analytics_routes(app)
 app.register_blueprint(settings_bp)
 
 @app.route('/')
@@ -1764,28 +2001,36 @@ def dashboard():
     # Get KPI statistics
     total_projects = Project.query.filter_by(user_id=current_user.id).count()
     
-    # Get active tasks (running crawl jobs)
+    # Get active tasks (running crawl jobs) - include all active statuses
     active_tasks = db.session.query(CrawlJob).join(Project).filter(
         Project.user_id == current_user.id,
-        CrawlJob.status == 'running'
+        CrawlJob.status.in_(['running', 'pending', 'crawling', 'finding_difference', 'paused'])
     ).count()
     
-    # Get recent diffs (for now, use total pages as placeholder)
-    recent_diffs = db.session.query(func.sum(ProjectPage.id)).join(Project).filter(
-        Project.user_id == current_user.id
-    ).scalar() or 0
-    
-    # Calculate success rate (completed jobs vs total jobs)
-    total_jobs = db.session.query(CrawlJob).join(Project).filter(
-        Project.user_id == current_user.id
-    ).count()
-    
-    completed_jobs = db.session.query(CrawlJob).join(Project).filter(
+    # Get recent diffs - count pages with actual visual differences
+    from sqlalchemy import or_
+    recent_diffs = db.session.query(ProjectPage).join(Project).filter(
         Project.user_id == current_user.id,
-        CrawlJob.status == 'completed'
+        ProjectPage.find_diff_status == 'completed',
+        or_(
+            ProjectPage.diff_mismatch_pct_desktop > 0,
+            ProjectPage.diff_mismatch_pct_tablet > 0,
+            ProjectPage.diff_mismatch_pct_mobile > 0
+        )
     ).count()
     
-    success_rate = round((completed_jobs / total_jobs * 100) if total_jobs > 0 else 0, 1)
+    # Calculate success rate (completed and ready jobs vs total jobs)
+    total_jobs = db.session.query(CrawlJob).join(Project).filter(
+        Project.user_id == current_user.id,
+        CrawlJob.status.in_(['completed', 'ready', 'Job Failed', 'diff_failed'])
+    ).count()
+    
+    successful_jobs = db.session.query(CrawlJob).join(Project).filter(
+        Project.user_id == current_user.id,
+        CrawlJob.status.in_(['completed', 'ready'])
+    ).count()
+    
+    success_rate = round((successful_jobs / total_jobs * 100) if total_jobs > 0 else 0, 1)
     
     # Get recent projects (last 5)
     recent_projects = Project.query.filter_by(user_id=current_user.id).order_by(desc(Project.created_at)).limit(5).all()

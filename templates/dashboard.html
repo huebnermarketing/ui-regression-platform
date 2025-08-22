@@ -529,6 +529,172 @@
                 display: block;
             }
         }
+
+        /* Heatmap Styles */
+        .heatmap-container {
+            padding: 1.5rem;
+        }
+
+        .heatmap-summary {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.875rem;
+            color: var(--subtle-text);
+        }
+
+        .summary-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 3px;
+            margin-bottom: 1rem;
+            max-width: 400px;
+        }
+
+        .heatmap-day {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .heatmap-day:hover {
+            transform: scale(1.2);
+            border: 1px solid var(--primary-text);
+        }
+
+        /* Intensity Colors */
+        .heatmap-day.none {
+            background-color: #ebedf0;
+        }
+
+        .heatmap-day.low {
+            background-color: #9be9a8;
+        }
+
+        .heatmap-day.medium {
+            background-color: #40c463;
+        }
+
+        .heatmap-day.high {
+            background-color: #30a14e;
+        }
+
+        .heatmap-day.very-high {
+            background-color: #216e39;
+        }
+
+        /* Legend */
+        .heatmap-legend {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--subtle-text);
+            justify-content: flex-end;
+        }
+
+        .legend-colors {
+            display: flex;
+            gap: 2px;
+        }
+
+        .legend-color {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        .legend-color.none {
+            background-color: #ebedf0;
+        }
+
+        .legend-color.low {
+            background-color: #9be9a8;
+        }
+
+        .legend-color.medium {
+            background-color: #40c463;
+        }
+
+        .legend-color.high {
+            background-color: #30a14e;
+        }
+
+        .legend-color.very-high {
+            background-color: #216e39;
+        }
+
+        .legend-label {
+            font-size: 0.75rem;
+            color: var(--subtle-text);
+        }
+
+        /* Tooltip */
+        .heatmap-tooltip {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.95);
+            color: white;
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            pointer-events: none;
+            white-space: nowrap;
+            transform: translate(-50%, -100%);
+            margin-top: -8px;
+        }
+
+        .heatmap-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 4px solid transparent;
+            border-top-color: rgba(15, 23, 42, 0.95);
+        }
+
+        .tooltip-date {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .tooltip-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 0.125rem;
+        }
+
+        .tooltip-stat {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .tooltip-stat-label {
+            color: #cbd5e1;
+        }
+
+        .tooltip-stat-value {
+            font-weight: 600;
+        }
+
+        .tooltip-stat-value.success {
+            color: var(--success-color);
+        }
+
+        .tooltip-stat-value.danger {
+            color: var(--danger-color);
+        }
     </style>
 </head>
 <body>
@@ -572,13 +738,7 @@
                 </a>
             </div>
             <div class="nav-item">
-                <a href="{{ url_for('crawl_queue') }}" class="nav-link">
-                    <i class="fas fa-list-ul"></i>
-                    <span>Crawl Queue</span>
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="#" class="nav-link" onclick="showComingSoon('Analytics')">
+                <a href="{{ url_for('analytics_dashboard') }}" class="nav-link">
                     <i class="fas fa-chart-bar"></i>
                     <span>Analytics</span>
                 </a>
@@ -723,12 +883,12 @@
                 <div class="project-list">
                     {% if recent_projects %}
                         {% for project in recent_projects %}
-                        <div class="project-item">
+                        <div class="project-item" data-project-id="{{ project.id }}">
                             <div class="project-info">
                                 <h3 class="project-name">{{ project.name }}</h3>
                                 <div class="project-meta">
-                                    <span><i class="fas fa-globe"></i> {{ project.page_count }} pages</span>
-                                    <span><i class="fas fa-clock"></i> 
+                                    <span><i class="fas fa-globe"></i> <span class="page-count">{{ project.page_count }}</span> pages</span>
+                                    <span><i class="fas fa-clock"></i>
                                         {% if project.last_crawl %}
                                             {{ project.last_crawl.created_at|ist_date }}
                                         {% else %}
@@ -767,20 +927,40 @@
                 </div>
             </div>
 
-            <!-- Daily Scans Section (Placeholder) -->
+            <!-- Daily Scans Heatmap Section -->
             <div class="section-card">
                 <div class="section-header">
                     <h2 class="section-title">
                         <i class="fas fa-calendar-day"></i>
-                        Daily Scans
+                        Daily Scans (Last 30 Days)
                     </h2>
-                </div>
-                <div class="empty-state">
-                    <div class="empty-icon">
-                        <i class="fas fa-chart-area"></i>
+                    <div class="section-actions">
+                        <div class="heatmap-summary" id="heatmapSummary">
+                            <span class="summary-item">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                Loading...
+                            </span>
+                        </div>
                     </div>
-                    <h3 class="empty-title">Scan Analytics Coming Soon</h3>
-                    <p class="empty-description">Daily scan metrics and trends will be available in the next release.</p>
+                </div>
+                <div class="heatmap-container">
+                    <div class="heatmap-grid" id="heatmapGrid">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Loading heatmap data...
+                        </div>
+                    </div>
+                    <div class="heatmap-legend">
+                        <span class="legend-label">Less</span>
+                        <div class="legend-colors">
+                            <div class="legend-color none" title="No scans"></div>
+                            <div class="legend-color low" title="1-2 scans"></div>
+                            <div class="legend-color medium" title="3-5 scans"></div>
+                            <div class="legend-color high" title="6-10 scans"></div>
+                            <div class="legend-color very-high" title="10+ scans"></div>
+                        </div>
+                        <span class="legend-label">More</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -822,8 +1002,8 @@
             const sidebar = document.getElementById('sidebar');
             const menuBtn = document.querySelector('.mobile-menu-btn');
             
-            if (window.innerWidth <= 768 && 
-                !sidebar.contains(event.target) && 
+            if (window.innerWidth <= 768 &&
+                !sidebar.contains(event.target) &&
                 !menuBtn.contains(event.target) &&
                 sidebar.classList.contains('open')) {
                 sidebar.classList.remove('open');
@@ -835,6 +1015,268 @@
             const sidebar = document.getElementById('sidebar');
             if (window.innerWidth > 768) {
                 sidebar.classList.remove('open');
+            }
+        });
+
+        // Dynamic status updates for Recent Projects
+        let statusUpdateInterval;
+
+        function updateProjectStatuses() {
+            fetch('/api/projects/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateProjectCards(data.projects);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching project statuses:', error);
+                });
+        }
+
+        function updateProjectCards(projects) {
+            projects.forEach(project => {
+                const projectCard = document.querySelector(`[data-project-id="${project.id}"]`);
+                if (projectCard) {
+                    // Update status badge
+                    const statusBadge = projectCard.querySelector('.status-badge');
+                    if (statusBadge) {
+                        const { statusText, statusClass } = getStatusDisplay(project.status);
+                        statusBadge.textContent = statusText;
+                        statusBadge.className = `status-badge ${statusClass}`;
+                    }
+
+                    // Update page count
+                    const pageCountElement = projectCard.querySelector('.page-count');
+                    if (pageCountElement) {
+                        pageCountElement.textContent = project.page_count;
+                    }
+
+                    // Update diff count (placeholder logic)
+                    const diffCountElement = projectCard.querySelector('.stat-value');
+                    if (diffCountElement) {
+                        diffCountElement.textContent = Math.min(project.page_count, 3);
+                    }
+                }
+            });
+        }
+
+        function getStatusDisplay(status) {
+            const statusMap = {
+                'not_started': { text: 'Not Started', class: 'secondary' },
+                'crawling': { text: 'Crawling', class: 'warning' },
+                'crawled': { text: 'Crawled', class: 'info' },
+                'finding_difference': { text: 'Processing', class: 'warning' },
+                'result': { text: 'Ready', class: 'success' },
+                'job_failed': { text: 'Failed', class: 'danger' }
+            };
+            
+            const statusInfo = statusMap[status] || { text: 'Unknown', class: 'secondary' };
+            return { statusText: statusInfo.text, statusClass: statusInfo.class };
+        }
+
+        // Daily Scans Heatmap functionality
+        let heatmapTooltip = null;
+
+        function loadDailyScansHeatmap() {
+            fetch('/api/analytics/daily-scans-heatmap?days=30')
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        renderHeatmap(result.data);
+                        updateHeatmapSummary(result.data.summary);
+                    } else {
+                        showHeatmapError('Failed to load heatmap data: ' + result.error);
+                    }
+                })
+                .catch(error => {
+                    showHeatmapError('Failed to load heatmap data: ' + error.message);
+                });
+        }
+
+        function renderHeatmap(data) {
+            const heatmapGrid = document.getElementById('heatmapGrid');
+            const heatmapData = data.heatmap_data;
+            
+            // Clear loading state
+            heatmapGrid.innerHTML = '';
+            
+            // Create day elements
+            heatmapData.forEach(dayData => {
+                const dayElement = document.createElement('div');
+                dayElement.className = `heatmap-day ${dayData.intensity}`;
+                dayElement.setAttribute('data-date', dayData.date);
+                dayElement.setAttribute('data-scans', dayData.total_scans);
+                dayElement.setAttribute('data-successful', dayData.successful_scans);
+                dayElement.setAttribute('data-failed', dayData.failed_scans);
+                dayElement.setAttribute('data-success-rate', dayData.success_rate);
+                dayElement.setAttribute('data-formatted-date', dayData.formatted_date);
+                dayElement.setAttribute('data-avg-duration', dayData.avg_duration);
+                
+                // Add hover events for tooltip
+                dayElement.addEventListener('mouseenter', showTooltip);
+                dayElement.addEventListener('mouseleave', hideTooltip);
+                
+                heatmapGrid.appendChild(dayElement);
+            });
+        }
+
+        function updateHeatmapSummary(summary) {
+            const summaryElement = document.getElementById('heatmapSummary');
+            
+            let summaryHTML = `
+                <span class="summary-item">
+                    <i class="fas fa-calendar-check"></i>
+                    ${summary.days_with_scans}/${summary.total_days} active days
+                </span>
+                <span class="summary-item">
+                    <i class="fas fa-chart-line"></i>
+                    ${summary.avg_scans_per_day} avg scans/day
+                </span>
+            `;
+            
+            if (summary.busiest_day) {
+                summaryHTML += `
+                    <span class="summary-item">
+                        <i class="fas fa-fire"></i>
+                        ${summary.busiest_day.scans} scans on ${summary.busiest_day.date}
+                    </span>
+                `;
+            }
+            
+            summaryElement.innerHTML = summaryHTML;
+        }
+
+        function showTooltip(event) {
+            const dayElement = event.target;
+            const rect = dayElement.getBoundingClientRect();
+            
+            // Create tooltip if it doesn't exist
+            if (!heatmapTooltip) {
+                heatmapTooltip = document.createElement('div');
+                heatmapTooltip.className = 'heatmap-tooltip';
+                document.body.appendChild(heatmapTooltip);
+            }
+            
+            // Get data from element
+            const date = dayElement.getAttribute('data-formatted-date');
+            const totalScans = parseInt(dayElement.getAttribute('data-scans'));
+            const successfulScans = parseInt(dayElement.getAttribute('data-successful'));
+            const failedScans = parseInt(dayElement.getAttribute('data-failed'));
+            const successRate = parseFloat(dayElement.getAttribute('data-success-rate'));
+            const avgDuration = parseFloat(dayElement.getAttribute('data-avg-duration'));
+            
+            // Build tooltip content
+            let tooltipHTML = `<div class="tooltip-date">${date}</div>`;
+            
+            if (totalScans > 0) {
+                tooltipHTML += `
+                    <div class="tooltip-stats">
+                        <div class="tooltip-stat">
+                            <span class="tooltip-stat-label">Total Scans:</span>
+                            <span class="tooltip-stat-value">${totalScans}</span>
+                        </div>
+                        <div class="tooltip-stat">
+                            <span class="tooltip-stat-label">Successful:</span>
+                            <span class="tooltip-stat-value success">${successfulScans}</span>
+                        </div>
+                        <div class="tooltip-stat">
+                            <span class="tooltip-stat-label">Failed:</span>
+                            <span class="tooltip-stat-value danger">${failedScans}</span>
+                        </div>
+                        <div class="tooltip-stat">
+                            <span class="tooltip-stat-label">Success Rate:</span>
+                            <span class="tooltip-stat-value">${successRate}%</span>
+                        </div>
+                `;
+                
+                if (avgDuration > 0) {
+                    tooltipHTML += `
+                        <div class="tooltip-stat">
+                            <span class="tooltip-stat-label">Avg Duration:</span>
+                            <span class="tooltip-stat-value">${formatDuration(avgDuration)}</span>
+                        </div>
+                    `;
+                }
+                
+                tooltipHTML += `</div>`;
+            } else {
+                tooltipHTML += `
+                    <div class="tooltip-stats">
+                        <div class="tooltip-stat">
+                            <span class="tooltip-stat-label">No scans</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            heatmapTooltip.innerHTML = tooltipHTML;
+            
+            // Position tooltip
+            const tooltipRect = heatmapTooltip.getBoundingClientRect();
+            const left = rect.left + (rect.width / 2);
+            const top = rect.top;
+            
+            heatmapTooltip.style.left = `${left}px`;
+            heatmapTooltip.style.top = `${top}px`;
+            heatmapTooltip.style.display = 'block';
+        }
+
+        function hideTooltip() {
+            if (heatmapTooltip) {
+                heatmapTooltip.style.display = 'none';
+            }
+        }
+
+        function formatDuration(seconds) {
+            if (seconds < 1) {
+                return `${Math.round(seconds * 1000)}ms`;
+            } else if (seconds < 60) {
+                return `${seconds.toFixed(1)}s`;
+            } else {
+                const minutes = Math.floor(seconds / 60);
+                const remainingSeconds = Math.round(seconds % 60);
+                return `${minutes}m ${remainingSeconds}s`;
+            }
+        }
+
+        function showHeatmapError(message) {
+            const heatmapGrid = document.getElementById('heatmapGrid');
+            heatmapGrid.innerHTML = `
+                <div class="error" style="grid-column: 1 / -1; text-align: center; padding: 1rem;">
+                    <i class="fas fa-exclamation-triangle"></i> ${message}
+                </div>
+            `;
+        }
+
+        // Start polling when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load heatmap data
+            loadDailyScansHeatmap();
+            
+            // Initial update for projects
+            updateProjectStatuses();
+            
+            // Poll every 5 seconds
+            statusUpdateInterval = setInterval(updateProjectStatuses, 5000);
+        });
+
+        // Stop polling when page is hidden/unloaded
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                if (statusUpdateInterval) {
+                    clearInterval(statusUpdateInterval);
+                }
+            } else {
+                // Resume polling when page becomes visible again
+                updateProjectStatuses();
+                statusUpdateInterval = setInterval(updateProjectStatuses, 5000);
+            }
+        });
+
+        window.addEventListener('beforeunload', function() {
+            if (statusUpdateInterval) {
+                clearInterval(statusUpdateInterval);
             }
         });
     </script>

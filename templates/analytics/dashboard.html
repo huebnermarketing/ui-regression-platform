@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - PixelPulse</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Modern Color Palette */
+        :root {
+            --primary-text: #0F172A;
+            --accent-color: #3b82f6;
+            --background: #FEFEFE;
+            --subtle-text: #8E9093;
+            --sidebar-bg: #0F172A;
+            --border-color: #BFCDD6;
+            --card-bg: #f5f7fa;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #3b82f6;
+            --purple-color: #8b5cf6;
+            --orange-color: #f97316;
+            --card-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.1), 0 2px 4px -1px rgba(15, 23, 42, 0.06);
+            --card-shadow-hover: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -2px rgba(15, 23, 42, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--background);
+            color: var(--primary-text);
+            overflow-x: hidden;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid rgba(191, 205, 214, 0.2);
+            z-index: 1000;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(191, 205, 214, 0.2);
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: #FEFEFE;
+        }
+
+        .sidebar-logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-color);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.25rem;
+        }
+
+        .sidebar-logo-text {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #FEFEFE;
+        }
+
+        .sidebar-user {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid rgba(191, 205, 214, 0.2);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .user-details h6 {
+            margin: 0;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #FEFEFE;
+        }
+
+        .user-details p {
+            margin: 0;
+            font-size: 0.75rem;
+            color: #8E9093;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            margin: 0.25rem 1rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: #BFCDD6;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: rgba(59, 130, 246, 0.1);
+            color: #FEFEFE;
+        }
+
+        .nav-link.active {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .nav-link i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            min-height: 100vh;
+            background: var(--card-bg);
+        }
+
+        /* Top Bar */
+        .top-bar {
+            background: var(--background);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .welcome-section h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+            color: var(--primary-text);
+        }
+
+        .welcome-section p {
+            margin: 0;
+            color: var(--subtle-text);
+            font-size: 0.875rem;
+        }
+
+        .quick-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .btn-action {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.25rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+        }
+
+        .btn-action:hover {
+            background: #2563eb;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--primary-text);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+            color: var(--primary-text);
+        }
+
+        /* Content Area */
+        .content-area {
+            padding: 1.5rem;
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
+        }
+
+        /* Compact Grid Layout */
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            height: calc(100vh - 120px);
+        }
+
+        /* Left Column - KPIs and Charts */
+        .left-column {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        /* Right Column - Tables */
+        .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        /* KPI Cards - Compact 2x2 Grid */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .kpi-card {
+            background: var(--background);
+            border-radius: 12px;
+            padding: 1.25rem;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .kpi-card:hover {
+            box-shadow: var(--card-shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        .kpi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+
+        .kpi-info h3 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin: 0;
+            line-height: 1;
+            color: var(--primary-text);
+        }
+
+        .kpi-info p {
+            margin: 0.25rem 0 0;
+            font-size: 0.8rem;
+            color: var(--subtle-text);
+            font-weight: 500;
+        }
+
+        .kpi-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            color: white;
+        }
+
+        .kpi-icon.runs { background: var(--info-color); }
+        .kpi-icon.success { background: var(--success-color); }
+        .kpi-icon.time { background: var(--warning-color); }
+        .kpi-icon.changes { background: var(--purple-color); }
+
+        .kpi-footer {
+            font-size: 0.7rem;
+            color: var(--subtle-text);
+            font-weight: 500;
+        }
+
+        /* Section Cards */
+        .section-card {
+            background: var(--background);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section-header {
+            padding: 1rem 1.25rem 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--primary-text);
+        }
+
+        /* Chart Container */
+        .chart-container {
+            padding: 1rem;
+            height: 250px;
+            position: relative;
+            flex: 1;
+        }
+
+        .chart-container.small {
+            height: 180px;
+        }
+
+
+        /* Table Styles */
+        .table-container {
+            padding: 0 1.25rem 1.25rem;
+            flex: 1;
+            height: auto;
+        }
+
+        .analytics-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+
+        .analytics-table th {
+            background: var(--card-bg);
+            padding: 0.6rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--primary-text);
+            border-bottom: 2px solid var(--border-color);
+            position: sticky;
+            top: 0;
+        }
+
+        .analytics-table td {
+            padding: 0.6rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--primary-text);
+        }
+
+        .analytics-table tr:hover {
+            background: var(--card-bg);
+        }
+
+        /* Loading States */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--subtle-text);
+        }
+
+        .loading i {
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error States */
+        .error {
+            padding: 1rem;
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+            border-radius: 6px;
+            margin: 1rem;
+            font-size: 0.875rem;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1200px) {
+            .analytics-grid {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .top-bar {
+                padding: 1rem;
+            }
+
+            .content-area {
+                padding: 1rem;
+            }
+
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .analytics-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            color: var(--primary-text);
+            padding: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-menu-btn {
+                display: block;
+            }
+        }
+
+        /* Interactive Elements */
+        .chart-legend {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            color: var(--subtle-text);
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        /* Tooltip Styles */
+        .chart-tooltip {
+            background: rgba(15, 23, 42, 0.9);
+            color: white;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <div class="sidebar" id="sidebar">
+        <!-- Sidebar Header -->
+        <div class="sidebar-header">
+            <a href="{{ url_for('dashboard') }}" class="sidebar-logo">
+                <div class="sidebar-logo-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="sidebar-logo-text">PixelPulse</div>
+            </a>
+        </div>
+
+        <!-- User Profile -->
+        <div class="sidebar-user">
+            <div class="user-info">
+                <div class="user-avatar">
+                    {{ user.username[0].upper() }}
+                </div>
+                <div class="user-details">
+                    <h6>{{ user.username }}</h6>
+                    <p>Administrator</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Menu -->
+        <nav class="sidebar-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">
+                    <i class="fas fa-home"></i>
+                    <span>Dashboard</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('projects_list') }}" class="nav-link">
+                    <i class="fas fa-folder"></i>
+                    <span>Projects</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('analytics_dashboard') }}" class="nav-link active">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Analytics</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="showComingSoon('Alerts')">
+                    <i class="fas fa-bell"></i>
+                    <span>Alerts</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="showComingSoon('Reports')">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Reports</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="showComingSoon('API Access')">
+                    <i class="fas fa-code"></i>
+                    <span>API Access</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('settings.settings_page') }}" class="nav-link">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="welcome-section">
+                <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h1>Analytics Dashboard</h1>
+                <p>Comprehensive insights into your visual testing performance.</p>
+            </div>
+            <div class="quick-actions">
+                <a href="{{ url_for('logout') }}" class="btn-action btn-secondary">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </a>
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content-area">
+            <div class="analytics-grid">
+                <!-- Left Column - KPIs and 2 Tables -->
+                <div class="left-column">
+                    <!-- Top 4 KPIs -->
+                    <div class="kpi-grid" id="kpi-grid">
+                        <div class="loading">
+                            <i class="fas fa-spinner"></i>
+                            Loading KPIs...
+                        </div>
+                    </div>
+
+                    <!-- Top Changed Pages -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <i class="fas fa-fire"></i>
+                                Top Changed Pages
+                            </h2>
+                        </div>
+                        <div class="table-container" style="margin-top: 1rem;">
+                            <table class="analytics-table" id="topChangedPagesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Page</th>
+                                        <th>Project</th>
+                                        <th>Diff %</th>
+                                        <th>Viewport</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="4" class="loading">
+                                            <i class="fas fa-spinner"></i>
+                                            Loading data...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Slowest Pages -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <i class="fas fa-clock"></i>
+                                Slowest Pages
+                            </h2>
+                        </div>
+                        <div class="table-container" style="margin-top: 1rem;">
+                            <table class="analytics-table" id="slowestPagesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Page</th>
+                                        <th>Project</th>
+                                        <th>Duration</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="3" class="loading">
+                                            <i class="fas fa-spinner"></i>
+                                            Loading data...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column - 2 Charts and 1 Table -->
+                <div class="right-column">
+                    <!-- Runs Over Time Chart -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <i class="fas fa-chart-line"></i>
+                                Runs Over Time (30 Days)
+                            </h2>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="runsOverTimeChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Change Distribution Donut Chart -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <i class="fas fa-chart-pie"></i>
+                                Change Distribution
+                            </h2>
+                        </div>
+                        <div class="chart-container small">
+                            <canvas id="changeDistributionChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Storage Usage -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <i class="fas fa-hdd"></i>
+                                Storage Usage
+                            </h2>
+                        </div>
+                        <div class="table-container" style="margin-top: 1rem;">
+                            <table class="analytics-table" id="storageUsageTable">
+                                <thead>
+                                    <tr>
+                                        <th>Project</th>
+                                        <th>Pages</th>
+                                        <th>Storage</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="3" class="loading">
+                                            <i class="fas fa-spinner"></i>
+                                            Loading data...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coming Soon Modal -->
+    <div class="modal fade" id="comingSoonModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Feature Coming Soon</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="modalFeatureName"></p>
+                    <p>This feature will be implemented in the next phase of development.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global chart instances
+        let runsOverTimeChart = null;
+        let changeDistributionChart = null;
+
+        // Color palette for charts
+        const chartColors = {
+            primary: '#3b82f6',
+            success: '#10b981',
+            warning: '#f59e0b',
+            danger: '#ef4444',
+            purple: '#8b5cf6',
+            orange: '#f97316',
+            gray: '#6b7280'
+        };
+
+        // Initialize analytics dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadKPIs();
+            loadCharts();
+            loadTables();
+        });
+
+        // Load KPI data
+        async function loadKPIs() {
+            try {
+                const response = await fetch('/api/analytics/kpis');
+                const result = await response.json();
+                
+                if (result.success) {
+                    renderKPIs(result.data);
+                } else {
+                    showError('kpi-grid', 'Failed to load KPIs: ' + result.error);
+                }
+            } catch (error) {
+                showError('kpi-grid', 'Failed to load KPIs: ' + error.message);
+            }
+        }
+
+        // Render KPI cards (Top 4 only)
+        function renderKPIs(data) {
+            const kpiGrid = document.getElementById('kpi-grid');
+            kpiGrid.innerHTML = `
+                <div class="kpi-card" onclick="showKPIDetails('runs')">
+                    <div class="kpi-header">
+                        <div class="kpi-info">
+                            <h3>${data.total_runs['7d']} / ${data.total_runs['30d']}</h3>
+                            <p>Total Runs (7D / 30D)</p>
+                        </div>
+                        <div class="kpi-icon runs">
+                            <i class="fas fa-play"></i>
+                        </div>
+                    </div>
+                    <div class="kpi-footer">Shows overall activity</div>
+                </div>
+
+                <div class="kpi-card" onclick="showKPIDetails('success')">
+                    <div class="kpi-header">
+                        <div class="kpi-info">
+                            <h3>${data.success_rate}%</h3>
+                            <p>Success Rate</p>
+                        </div>
+                        <div class="kpi-icon success">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                    </div>
+                    <div class="kpi-footer">Reliability measure</div>
+                </div>
+
+                <div class="kpi-card" onclick="showKPIDetails('time')">
+                    <div class="kpi-header">
+                        <div class="kpi-info">
+                            <h3>${data.avg_processing_time.formatted}</h3>
+                            <p>Avg Processing Time</p>
+                        </div>
+                        <div class="kpi-icon time">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                    </div>
+                    <div class="kpi-footer">Crawl + Diff combined</div>
+                </div>
+
+                <div class="kpi-card" onclick="showKPIDetails('changes')">
+                    <div class="kpi-header">
+                        <div class="kpi-info">
+                            <h3>${data.change_rate}%</h3>
+                            <p>Change Rate</p>
+                        </div>
+                        <div class="kpi-icon changes">
+                            <i class="fas fa-exchange-alt"></i>
+                        </div>
+                    </div>
+                    <div class="kpi-footer">% with visual changes > 0%</div>
+                </div>
+            `;
+        }
+
+        // Load all charts
+        async function loadCharts() {
+            await Promise.all([
+                loadRunsOverTimeChart(),
+                loadChangeDistributionChart()
+            ]);
+        }
+
+        // Load runs over time chart
+        async function loadRunsOverTimeChart() {
+            try {
+                const response = await fetch('/api/analytics/runs-over-time?days=30');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const ctx = document.getElementById('runsOverTimeChart').getContext('2d');
+                    runsOverTimeChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: result.data.labels,
+                            datasets: [{
+                                label: 'Runs',
+                                data: result.data.data,
+                                borderColor: chartColors.primary,
+                                backgroundColor: chartColors.primary + '20',
+                                tension: 0.4,
+                                fill: true,
+                                pointBackgroundColor: chartColors.primary,
+                                pointBorderColor: '#ffffff',
+                                pointBorderWidth: 2,
+                                pointRadius: 4,
+                                pointHoverRadius: 6
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {
+                                intersect: false,
+                                mode: 'index'
+                            },
+                            plugins: {
+                                legend: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                                    titleColor: '#ffffff',
+                                    bodyColor: '#ffffff',
+                                    borderColor: chartColors.primary,
+                                    borderWidth: 1,
+                                    cornerRadius: 6,
+                                    displayColors: false,
+                                    callbacks: {
+                                        title: function(context) {
+                                            return new Date(context[0].label).toLocaleDateString();
+                                        },
+                                        label: function(context) {
+                                            return `${context.parsed.y} runs`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    display: true,
+                                    grid: {
+                                        display: false
+                                    },
+                                    ticks: {
+                                        maxTicksLimit: 7,
+                                        callback: function(value, index, values) {
+                                            const date = new Date(this.getLabelForValue(value));
+                                            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                        }
+                                    }
+                                },
+                                y: {
+                                    beginAtZero: true,
+                                    grid: {
+                                        color: 'rgba(0, 0, 0, 0.05)'
+                                    },
+                                    ticks: {
+                                        stepSize: 1
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load runs over time chart:', error);
+            }
+        }
+
+        // Load change distribution donut chart
+        async function loadChangeDistributionChart() {
+            try {
+                const response = await fetch('/api/analytics/change-distribution');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const ctx = document.getElementById('changeDistributionChart').getContext('2d');
+                    
+                    const colors = [
+                        chartColors.success,
+                        chartColors.primary,
+                        chartColors.purple,
+                        chartColors.warning,
+                        chartColors.orange,
+                        chartColors.danger
+                    ];
+                    
+                    changeDistributionChart = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: result.data.labels,
+                            datasets: [{
+                                data: result.data.data,
+                                backgroundColor: colors,
+                                borderColor: '#ffffff',
+                                borderWidth: 2,
+                                hoverBorderWidth: 3
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            cutout: '60%',
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        padding: 15,
+                                        usePointStyle: true,
+                                        font: {
+                                            size: 11
+                                        }
+                                    }
+                                },
+                                tooltip: {
+                                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                                    titleColor: '#ffffff',
+                                    bodyColor: '#ffffff',
+                                    borderColor: chartColors.primary,
+                                    borderWidth: 1,
+                                    cornerRadius: 6,
+                                    callbacks: {
+                                        label: function(context) {
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                            return `${context.label}: ${context.parsed} pages (${percentage}%)`;
+                                        }
+                                    }
+                                }
+                            },
+                            animation: {
+                                animateRotate: true,
+                                duration: 1000
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load change distribution chart:', error);
+            }
+        }
+
+        // Load all tables
+        async function loadTables() {
+            await Promise.all([
+                loadTopChangedPages(),
+                loadSlowestPages(),
+                loadStorageUsage()
+            ]);
+        }
+
+        // Load top changed pages table
+        async function loadTopChangedPages() {
+            try {
+                const response = await fetch('/api/analytics/top-changed-pages?limit=8');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const tbody = document.querySelector('#topChangedPagesTable tbody');
+                    if (result.data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--subtle-text);">No data available</td></tr>';
+                        return;
+                    }
+                    
+                    tbody.innerHTML = result.data.map(page => `
+                        <tr>
+                            <td title="${page.page_name}">${truncateText(page.page_name, 20)}</td>
+                            <td title="${page.project_name}">${truncateText(page.project_name, 15)}</td>
+                            <td><span style="color: ${page.diff_percentage > 15 ? 'var(--danger-color)' : page.diff_percentage > 5 ? 'var(--warning-color)' : 'var(--success-color)'}">${page.diff_percentage.toFixed(1)}%</span></td>
+                            <td><span class="badge" style="background: var(--info-color); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem;">${page.max_viewport}</span></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                showTableError('topChangedPagesTable', 'Failed to load top changed pages');
+            }
+        }
+
+        // Load slowest pages table
+        async function loadSlowestPages() {
+            try {
+                const response = await fetch('/api/analytics/slowest-pages?limit=8');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const tbody = document.querySelector('#slowestPagesTable tbody');
+                    if (result.data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--subtle-text);">No data available</td></tr>';
+                        return;
+                    }
+                    
+                    tbody.innerHTML = result.data.map(page => `
+                        <tr>
+                            <td title="${page.page_name}">${truncateText(page.page_name, 20)}</td>
+                            <td title="${page.project_name}">${truncateText(page.project_name, 15)}</td>
+                            <td><span style="color: ${page.duration > 10 ? 'var(--danger-color)' : page.duration > 5 ? 'var(--warning-color)' : 'var(--success-color)'}">${page.duration_formatted}</span></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                showTableError('slowestPagesTable', 'Failed to load slowest pages');
+            }
+        }
+
+        // Load storage usage table
+        async function loadStorageUsage() {
+            try {
+                const response = await fetch('/api/analytics/storage-usage');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const tbody = document.querySelector('#storageUsageTable tbody');
+                    if (result.data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--subtle-text);">No data available</td></tr>';
+                        return;
+                    }
+                    
+                    tbody.innerHTML = result.data.map(project => `
+                        <tr>
+                            <td title="${project.project_name}">${truncateText(project.project_name, 20)}</td>
+                            <td>${project.page_count}</td>
+                            <td><span style="color: ${project.estimated_storage_mb > 100 ? 'var(--danger-color)' : project.estimated_storage_mb > 50 ? 'var(--warning-color)' : 'var(--success-color)'}">${project.estimated_storage_formatted}</span></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                showTableError('storageUsageTable', 'Failed to load storage usage');
+            }
+        }
+
+        // Utility functions
+        function truncateText(text, maxLength) {
+            if (text.length <= maxLength) return text;
+            return text.substring(0, maxLength) + '...';
+        }
+
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="error"><i class="fas fa-exclamation-triangle"></i> ${message}</div>`;
+        }
+
+        function showTableError(tableId, message) {
+            const tbody = document.querySelector(`#${tableId} tbody`);
+            const colCount = tbody.closest('table').querySelectorAll('th').length;
+            tbody.innerHTML = `<tr><td colspan="${colCount}" class="error">${message}</td></tr>`;
+        }
+
+        function showKPIDetails(kpiType) {
+            // Add interactive feedback for KPI clicks
+            console.log(`KPI clicked: ${kpiType}`);
+            // Could implement drill-down functionality here
+        }
+
+        function showComingSoon(featureName) {
+            document.getElementById('modalFeatureName').textContent = featureName + ' functionality is coming soon!';
+            new bootstrap.Modal(document.getElementById('comingSoonModal')).show();
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const menuBtn = document.querySelector('.mobile-menu-btn');
+            
+            if (window.innerWidth <= 768 && 
+                !sidebar.contains(event.target) && 
+                !menuBtn.contains(event.target) &&
+                sidebar.classList.contains('open')) {
+                sidebar.classList.remove('open');
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const sidebar = document.getElementById('sidebar');
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('open');
+            }
+        });
+    </script>
+</body>
+</html>

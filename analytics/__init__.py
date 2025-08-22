@@ -1,0 +1,1 @@
+# Analytics module for UI regression platform

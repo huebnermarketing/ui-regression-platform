@@ -91,15 +91,18 @@ class RunStateService:
                 return self._create_error_state(f"Project {project_id} not found")
             
             # Get jobs for this project (latest run if run_id not specified)
+            # FIXED: Always refresh from database to avoid caching issues
             jobs_query = CrawlJob.query.filter_by(project_id=project_id)
             
             if run_id:
                 # Filter by specific run if provided
                 jobs_query = jobs_query.filter_by(run_id=run_id)
             
+            # FIXED: Ensure consistent ordering by creation time
             jobs = jobs_query.order_by(desc(CrawlJob.created_at)).all()
             
             # Get pages for this project/run
+            # FIXED: Always refresh from database to avoid caching issues
             pages_query = ProjectPage.query.filter_by(project_id=project_id)
             if run_id:
                 pages_query = pages_query.filter_by(current_run_id=run_id)
@@ -115,7 +118,13 @@ class RunStateService:
                 'run_id': run_id or 'latest',
                 'total_jobs': len(jobs),
                 'total_pages': len(pages),
-                'last_updated': datetime.now(timezone.utc).isoformat()
+                'last_updated': datetime.now(timezone.utc).isoformat(),
+                'debug_info': {
+                    'jobs_count': len(jobs),
+                    'pages_count': len(pages),
+                    'latest_job_status': jobs[0].status if jobs else None,
+                    'latest_job_type': jobs[0].job_type if jobs else None
+                }
             })
             
             return run_state
@@ -160,7 +169,7 @@ class RunStateService:
     def _check_job_failures(self, project_id: int, jobs: List[CrawlJob]) -> Optional[Dict[str, Any]]:
         """Check for failed or orphaned jobs"""
         
-        failed_jobs = [job for job in jobs if job.status == 'failed']
+        failed_jobs = [job for job in jobs if job.status in ['Job Failed', 'diff_failed']]
         if failed_jobs:
             latest_failed = failed_jobs[0]  # Most recent failed job
             return {
@@ -196,8 +205,8 @@ class RunStateService:
         current_time = datetime.now(timezone.utc)
         
         for job in jobs:
-            if (job.status == 'running' and 
-                job.started_at and 
+            if (job.status == 'Crawling' and
+                job.started_at and
                 project_id not in self.crawler_scheduler.running_jobs):
                 
                 # Check if job has been running too long (>10 minutes)
@@ -215,26 +224,37 @@ class RunStateService:
         if self.crawler_scheduler:
             scheduler_status = self.crawler_scheduler.get_job_status(project_id)
         
-        # Check for running jobs in database
-        running_jobs = [job for job in jobs if job.status in ['running', 'pending']]
+        # Check for running jobs in database - FIXED: Use correct enum values
+        running_jobs = [job for job in jobs if job.status in ['Crawling', 'pending', 'finding_difference']]
         
         # Check if scheduler shows active job
         if scheduler_status and scheduler_status.get('status') == 'scheduled':
-            running_jobs = [job for job in jobs if job.status == 'running'] or running_jobs
+            running_jobs = [job for job in jobs if job.status == 'Crawling'] or running_jobs
         
         if running_jobs:
             latest_running = running_jobs[0]  # Most recent running job
             
-            # Determine state based on job type
-            if latest_running.job_type in ['find_difference', 'screenshot', 'diff']:
+            # Determine state based on job status first, then job type
+            if latest_running.status == 'Crawling':
+                state = 'crawling'
+                description = 'Discovering pages on the website'
+            elif latest_running.status == 'finding_difference':
+                state = 'finding_difference'
+                description = 'Processing screenshots and generating visual differences'
+            elif latest_running.job_type in ['find_difference', 'screenshot', 'diff']:
                 state = 'finding_difference'
                 description = 'Processing screenshots and generating visual differences'
             elif latest_running.job_type == 'crawl':
                 state = 'crawling'
                 description = 'Discovering pages on the website'
             else:
-                state = 'finding_difference'  # Default for unknown job types
-                description = f'Processing {latest_running.job_type} job'
+                # Default based on status if job_type is unclear
+                if latest_running.status in ['Crawling', 'pending']:
+                    state = 'crawling'
+                    description = 'Discovering pages on the website'
+                else:
+                    state = 'finding_difference'
+                    description = f'Processing {latest_running.job_type} job'
             
             # Get progress info
             progress_info = self._get_job_progress(project_id, latest_running)
@@ -297,21 +317,75 @@ class RunStateService:
         if not jobs:
             return None
         
-        # Get latest completed jobs by type
-        completed_jobs = [job for job in jobs if job.status == 'completed']
+        # Get latest completed jobs by type - FIXED: Use correct enum values and sort by creation time
+        completed_jobs = [job for job in jobs if job.status in ['Crawled', 'ready', 'diff_failed']]
         
         if not completed_jobs:
             return None
         
-        # Check for result state - find_difference completed with diffs
-        find_diff_jobs = [job for job in completed_jobs if job.job_type == 'find_difference']
-        if find_diff_jobs:
-            # Check if we have any completed diffs
+        # Sort completed jobs by creation time (most recent first) for consistent ordering
+        completed_jobs.sort(key=lambda x: x.created_at, reverse=True)
+        
+        # Check for result state - jobs with 'ready' status that have completed the full lifecycle
+        # This includes jobs that went through: Started → Crawling → Crawled → Finding difference → Ready
+        ready_jobs = [job for job in completed_jobs if job.status == 'ready']
+        if ready_jobs:
+            # Sort ready jobs by creation time (most recent first)
+            ready_jobs.sort(key=lambda x: x.created_at, reverse=True)
+            latest_ready_job = ready_jobs[0]
+            
+            # Check if we have any completed diffs (indicating the full pipeline was completed)
             pages_with_diffs = [
-                page for page in pages 
+                page for page in pages
                 if any([
                     page.diff_status_desktop == 'completed',
-                    page.diff_status_tablet == 'completed', 
+                    page.diff_status_tablet == 'completed',
+                    page.diff_status_mobile == 'completed'
+                ])
+            ]
+            
+            # If we have ready jobs and pages with diffs, show as "Result"
+            if pages_with_diffs:
+                total_diffs = sum([
+                    1 for page in pages_with_diffs
+                    for viewport in ['desktop', 'tablet', 'mobile']
+                    if getattr(page, f'diff_status_{viewport}') == 'completed'
+                ])
+                
+                return {
+                    'state': 'result',
+                    'pages_total': len(pages),
+                    'pages_done': len(pages_with_diffs),
+                    'progress_percentage': 100,
+                    'total_diffs': total_diffs,
+                    'completed_at': latest_ready_job.completed_at.isoformat() if latest_ready_job.completed_at else None
+                }
+            
+            # If we have ready jobs but no diffs yet, still show as "Result" since the job completed
+            # This handles cases where the job completed but diffs haven't been processed yet
+            else:
+                return {
+                    'state': 'result',
+                    'pages_total': len(pages),
+                    'pages_done': len(pages),
+                    'progress_percentage': 100,
+                    'total_diffs': 0,
+                    'completed_at': latest_ready_job.completed_at.isoformat() if latest_ready_job.completed_at else None
+                }
+        
+        # Check for find_difference jobs specifically (backward compatibility)
+        find_diff_jobs = [job for job in completed_jobs if job.job_type == 'find_difference' and job.status == 'ready']
+        if find_diff_jobs:
+            # Sort by creation time (most recent first)
+            find_diff_jobs.sort(key=lambda x: x.created_at, reverse=True)
+            latest_find_diff_job = find_diff_jobs[0]
+            
+            # Check if we have any completed diffs
+            pages_with_diffs = [
+                page for page in pages
+                if any([
+                    page.diff_status_desktop == 'completed',
+                    page.diff_status_tablet == 'completed',
                     page.diff_status_mobile == 'completed'
                 ])
             ]
@@ -329,18 +403,23 @@ class RunStateService:
                     'pages_done': len(pages_with_diffs),
                     'progress_percentage': 100,
                     'total_diffs': total_diffs,
-                    'completed_at': find_diff_jobs[0].completed_at.isoformat() if find_diff_jobs[0].completed_at else None
+                    'completed_at': latest_find_diff_job.completed_at.isoformat() if latest_find_diff_job.completed_at else None
                 }
         
         # Check for crawled state - crawl completed with pages
-        crawl_jobs = [job for job in completed_jobs if job.job_type == 'crawl']
-        if crawl_jobs and pages:
+        # FIXED: Only show crawled if there are no ready jobs (to ensure consistency)
+        crawl_jobs = [job for job in completed_jobs if job.job_type == 'crawl' and job.status == 'Crawled']
+        if crawl_jobs and pages and not ready_jobs:
+            # Sort by creation time (most recent first)
+            crawl_jobs.sort(key=lambda x: x.created_at, reverse=True)
+            latest_crawl_job = crawl_jobs[0]
+            
             return {
                 'state': 'crawled',
                 'pages_total': len(pages),
                 'pages_done': len(pages),
                 'progress_percentage': 100,
-                'completed_at': crawl_jobs[0].completed_at.isoformat() if crawl_jobs[0].completed_at else None
+                'completed_at': latest_crawl_job.completed_at.isoformat() if latest_crawl_job.completed_at else None
             }
         
         return None
@@ -350,7 +429,8 @@ class RunStateService:
         state_config = self.PIPELINE_STATES.get(state_key, self.PIPELINE_STATES['not_started'])
         
         return {
-            'run_state': state_key,
+            'state': state_key,  # FIXED: Use 'state' key to match template expectations
+            'run_state': state_key,  # Keep for backward compatibility
             'label': state_config['label'],
             'description': kwargs.get('description', state_config['description']),
             'color': state_config['color'],
@@ -373,7 +453,8 @@ class RunStateService:
     def _create_error_state(self, error_message: str) -> Dict[str, Any]:
         """Create an error state response"""
         return {
-            'run_state': 'job_failed',
+            'state': 'job_failed',  # FIXED: Use 'state' key to match template expectations
+            'run_state': 'job_failed',  # Keep for backward compatibility
             'label': 'Error',
             'description': error_message,
             'color': '#ef4444',

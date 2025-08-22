@@ -934,13 +934,7 @@
                 </a>
             </div>
             <div class="nav-item">
-                <a href="{{ url_for('crawl_queue') }}" class="nav-link">
-                    <i class="fas fa-list-ul"></i>
-                    <span>Crawl Queue</span>
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="#" class="nav-link">
+                <a href="{{ url_for('analytics_dashboard') }}" class="nav-link">
                     <i class="fas fa-chart-bar"></i>
                     <span>Analytics</span>
                 </a>
@@ -1038,7 +1032,7 @@
                                         Created {{ project.created_at|ist_datetime }}
                                     </div>
                                 </div>
-                                <!-- Pipeline Status Badge on the right -->
+                                <!-- Latest Job Status Badge on the right -->
                                 <div>
                                     {% if run_state.state == 'crawling' %}
                                         <span class="status-badge warning">
@@ -1185,8 +1179,7 @@
                                             </td>
                                             <td>
                                                 <div class="created-timestamp">
-                                                    <div class="created-date">{{ project.created_at.strftime('%d/%m/%Y') }}</div>
-                                                    <div class="created-time">{{ project.created_at.strftime('%I:%M:%S %p') }}</div>
+                                                    <div class="created-date">{{ project.created_at|ist_datetime }}</div>
                                                 </div>
                                             </td>
                                             <td>
@@ -1503,25 +1496,134 @@
             }
         });
 
-        // Auto-refresh project statuses if any jobs are running
-        function refreshProjectStatuses() {
-            // Check if any projects have running jobs
-            const runningStatuses = document.querySelectorAll('.status-badge.warning');
-            
-            if (runningStatuses.length > 0) {
-                // Reload the page to get updated statuses
-                location.reload();
+        // Real-time project status updates
+        let statusPollingInterval = null;
+        let isPolling = false;
+
+        // Update project status and page count in both grid and list views
+        function updateProjectStatus(projectId, newStatus, pageCount) {
+            // Update grid view status badge and page count
+            const gridCard = document.querySelector(`.project-card [data-project-id="${projectId}"]`)?.closest('.project-card');
+            if (gridCard) {
+                const statusBadge = gridCard.querySelector('.status-badge');
+                if (statusBadge) {
+                    updateStatusBadge(statusBadge, newStatus);
+                }
+                
+                const statBadge = gridCard.querySelector('.stat-badge');
+                if (statBadge && pageCount !== undefined) {
+                    statBadge.innerHTML = `<i class="fas fa-file-alt"></i> ${pageCount} pages`;
+                }
+            }
+
+            // Update list view status badge and page count
+            const listRow = document.querySelector(`tr[data-project-id="${projectId}"]`);
+            if (listRow) {
+                const statusCell = listRow.querySelector('td:nth-child(5) .status-badge');
+                if (statusCell) {
+                    updateStatusBadge(statusCell, newStatus);
+                }
+                
+                const pageCell = listRow.querySelector('td:nth-child(4)');
+                if (pageCell && pageCount !== undefined) {
+                    pageCell.textContent = pageCount;
+                }
             }
         }
 
-        // Check for running jobs and set up auto-refresh
-        document.addEventListener('DOMContentLoaded', function() {
+        // Update status badge with appropriate class and content
+        function updateStatusBadge(badge, status) {
+            // Remove all status classes
+            badge.classList.remove('warning', 'success', 'info', 'secondary', 'danger');
+            
+            switch (status) {
+                case 'crawling':
+                    badge.classList.add('warning');
+                    badge.innerHTML = '<i class="fas fa-spider"></i>Crawling';
+                    break;
+                case 'finding_difference':
+                    badge.classList.add('warning');
+                    badge.innerHTML = '<i class="fas fa-search"></i>Finding Differences';
+                    break;
+                case 'job_failed':
+                    badge.classList.add('danger');
+                    badge.innerHTML = '<i class="fas fa-exclamation-triangle"></i>Failed';
+                    break;
+                case 'result':
+                    badge.classList.add('success');
+                    badge.innerHTML = '<i class="fas fa-check-circle"></i>Results Ready';
+                    break;
+                case 'crawled':
+                    badge.classList.add('info');
+                    badge.innerHTML = '<i class="fas fa-list"></i>Crawled';
+                    break;
+                default:
+                    badge.classList.add('secondary');
+                    badge.innerHTML = '<i class="fas fa-minus-circle"></i>Not Started';
+                    break;
+            }
+        }
+
+        // Poll for project status updates
+        async function pollProjectStatuses() {
+            if (isPolling) return;
+            isPolling = true;
+
+            try {
+                const response = await fetch('/api/projects/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.success && data.projects) {
+                        let hasRunningJobs = false;
+                        
+                        data.projects.forEach(project => {
+                            updateProjectStatus(project.id, project.status, project.page_count);
+                            
+                            // Check if any jobs are still running
+                            if (project.status === 'crawling' || project.status === 'finding_difference') {
+                                hasRunningJobs = true;
+                            }
+                        });
+                        
+                        // Stop polling if no jobs are running
+                        if (!hasRunningJobs && statusPollingInterval) {
+                            clearInterval(statusPollingInterval);
+                            statusPollingInterval = null;
+                            console.log('Stopped polling - no running jobs');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error polling project statuses:', error);
+            } finally {
+                isPolling = false;
+            }
+        }
+
+        // Start polling for status updates
+        function startStatusPolling() {
+            if (statusPollingInterval) return; // Already polling
+            
+            console.log('Starting project status polling...');
+            statusPollingInterval = setInterval(pollProjectStatuses, 3000); // Poll every 3 seconds
+            
+            // Do an immediate poll
+            pollProjectStatuses();
+        }
+
+        // Check for running jobs and start polling if needed
+        function checkAndStartPolling() {
             const runningStatuses = document.querySelectorAll('.status-badge.warning');
             
             if (runningStatuses.length > 0) {
-                // Refresh every 5 seconds if there are running jobs
-                setInterval(refreshProjectStatuses, 5000);
+                startStatusPolling();
             }
+        }
+
+        // Initialize polling on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAndStartPolling();
         });
 
         // History Modal Variables
