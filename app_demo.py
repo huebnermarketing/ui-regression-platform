@@ -31,7 +31,7 @@ from models.project import Project, ProjectPage
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 # Initialize crawler scheduler (working demo version)
 import threading
@@ -63,7 +63,7 @@ class DemoCrawlerScheduler:
                 print(f"Starting crawl job for project {project_id}")
                 
                 # Get project from database
-                project = Project.query.get(project_id)
+                project = db.session.get(Project, project_id)
                 if not project:
                     print(f"Project {project_id} not found")
                     return

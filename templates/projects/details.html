@@ -1327,7 +1327,7 @@
                                                          data-diff-pct="{{ page.diff_mismatch_pct_desktop or 0 }}"
                                                          data-last-crawled="{{ page.last_run_at or '' }}"
                                                          data-status="{{ page.diff_status_desktop or 'not_started' }}">
-                                                        <span class="viewport-emoji" style="font-size: 1.1rem; margin-bottom: 0.125rem;">🖥️</span>
+                                                        <span class="viewport-emoji" style="font-size: 1.1rem; margin-bottom: 0.125rem;"><i class="fas fa-desktop"></i></span>
                                                         <small style="color: {% if page.diff_status_desktop == 'completed' %}{% if page.diff_mismatch_pct_desktop and page.diff_mismatch_pct_desktop > 5 %}var(--danger-color){% elif page.diff_mismatch_pct_desktop and page.diff_mismatch_pct_desktop > 1 %}var(--warning-color){% else %}var(--success-color){% endif %}{% elif page.diff_status_desktop == 'failed' %}var(--danger-color){% elif page.diff_status_desktop == 'no_baseline' %}var(--warning-color){% else %}var(--subtle-text){% endif %}; font-weight: 600; font-size: 0.625rem;">
                                                             {% if page.diff_status_desktop == 'completed' %}
                                                                 {% if page.diff_mismatch_pct_desktop is not none %}{{ "%.1f"|format(page.diff_mismatch_pct_desktop) }}%{% else %}0.0%{% endif %}
@@ -1350,7 +1350,7 @@
                                                          data-diff-pct="{{ page.diff_mismatch_pct_tablet or 0 }}"
                                                          data-last-crawled="{{ page.last_run_at or '' }}"
                                                          data-status="{{ page.diff_status_tablet or 'not_started' }}">
-                                                        <span class="viewport-emoji" style="font-size: 1.1rem; margin-bottom: 0.125rem;">📱</span>
+                                                        <span class="viewport-emoji" style="font-size: 1.1rem; margin-bottom: 0.125rem;"><i class="fas fa-tablet-alt"></i></span>
                                                         <small style="color: {% if page.diff_status_tablet == 'completed' %}{% if page.diff_mismatch_pct_tablet and page.diff_mismatch_pct_tablet > 5 %}var(--danger-color){% elif page.diff_mismatch_pct_tablet and page.diff_mismatch_pct_tablet > 1 %}var(--warning-color){% else %}var(--success-color){% endif %}{% elif page.diff_status_tablet == 'failed' %}var(--danger-color){% elif page.diff_status_tablet == 'no_baseline' %}var(--warning-color){% else %}var(--subtle-text){% endif %}; font-weight: 600; font-size: 0.625rem;">
                                                             {% if page.diff_status_tablet == 'completed' %}
                                                                 {% if page.diff_mismatch_pct_tablet is not none %}{{ "%.1f"|format(page.diff_mismatch_pct_tablet) }}%{% else %}0.0%{% endif %}
@@ -1373,7 +1373,7 @@
                                                          data-diff-pct="{{ page.diff_mismatch_pct_mobile or 0 }}"
                                                          data-last-crawled="{{ page.last_run_at or '' }}"
                                                          data-status="{{ page.diff_status_mobile or 'not_started' }}">
-                                                        <span class="viewport-emoji" style="font-size: 1.1rem; margin-bottom: 0.125rem;">📲</span>
+                                                        <span class="viewport-emoji" style="font-size: 1.1rem; margin-bottom: 0.125rem;"><i class="fas fa-mobile-alt"></i></span>
                                                         <small style="color: {% if page.diff_status_mobile == 'completed' %}{% if page.diff_mismatch_pct_mobile and page.diff_mismatch_pct_mobile > 5 %}var(--danger-color){% elif page.diff_mismatch_pct_mobile and page.diff_mismatch_pct_mobile > 1 %}var(--warning-color){% else %}var(--success-color){% endif %}{% elif page.diff_status_mobile == 'failed' %}var(--danger-color){% elif page.diff_status_mobile == 'no_baseline' %}var(--warning-color){% else %}var(--subtle-text){% endif %}; font-weight: 600; font-size: 0.625rem;">
                                                             {% if page.diff_status_mobile == 'completed' %}
                                                                 {% if page.diff_mismatch_pct_mobile is not none %}{{ "%.1f"|format(page.diff_mismatch_pct_mobile) }}%{% else %}0.0%{% endif %}
@@ -2861,9 +2861,9 @@
             console.log(`🔧 generateInlineViewportIconsFromBackend called for page: ${pageKey}`, pageData);
             
             const viewports = [
-                { key: 'desktop', icon: 'fa-desktop', label: 'Desktop', emoji: '🖥️' },
-                { key: 'tablet', icon: 'fa-tablet-alt', label: 'Tablet', emoji: '📱' },
-                { key: 'mobile', icon: 'fa-mobile-alt', label: 'Mobile', emoji: '📲' }
+                { key: 'desktop', icon: 'fa-desktop', label: 'Desktop', emoji: '<i class="fas fa-desktop"></i>' },
+                { key: 'tablet', icon: 'fa-tablet-alt', label: 'Tablet', emoji: '<i class="fas fa-tablet-alt"></i>' },
+                { key: 'mobile', icon: 'fa-mobile-alt', label: 'Mobile', emoji: '<i class="fas fa-mobile-alt"></i>' }
             ];
             
             try {
@@ -3030,9 +3030,9 @@
         // Generate inline viewport icons for accordion header
         function generateInlineViewportIcons(pageData, pageKey) {
             const viewports = [
-                { key: 'desktop', icon: 'fa-desktop', label: 'Desktop', emoji: '🖥️' },
-                { key: 'tablet', icon: 'fa-tablet-alt', label: 'Tablet', emoji: '📱' },
-                { key: 'mobile', icon: 'fa-mobile-alt', label: 'Mobile', emoji: '📲' }
+                { key: 'desktop', icon: 'fa-desktop', label: 'Desktop', emoji: '<i class="fas fa-desktop"></i>' },
+                { key: 'tablet', icon: 'fa-tablet-alt', label: 'Tablet', emoji: '<i class="fas fa-tablet-alt"></i>' },
+                { key: 'mobile', icon: 'fa-mobile-alt', label: 'Mobile', emoji: '<i class="fas fa-mobile-alt"></i>' }
             ];
             
             return viewports.map(viewport => {
@@ -3414,12 +3414,12 @@
             // Default to "Diff Only" view when clicked from viewport icons
             diffOnlyModeElement.checked = true;
             switchDiffViewMode('diff-only');
-            console.log('📱 Set to Diff Only view for viewport icon click');
+            console.log('Set to Diff Only view for viewport icon click');
         } else if (sideBySideModeElement) {
             // Default to "Side by Side" view for other cases
             sideBySideModeElement.checked = true;
             switchDiffViewMode('side-by-side');
-            console.log('📱 Set to Side by Side view');
+            console.log('Set to Side by Side view');
         } else {
             console.warn('⚠️ View mode elements not found');
         }
@@ -4005,9 +4005,9 @@
         // Generate inline viewport icons for pages accordion (similar to history but for main page)
         function generateInlineViewportIconsForPages(pageData, pageKey) {
             const viewports = [
-                { key: 'desktop', icon: 'fa-desktop', label: 'Desktop', emoji: '🖥️' },
-                { key: 'tablet', icon: 'fa-tablet-alt', label: 'Tablet', emoji: '📱' },
-                { key: 'mobile', icon: 'fa-mobile-alt', label: 'Mobile', emoji: '📲' }
+                { key: 'desktop', icon: 'fa-desktop', label: 'Desktop', emoji: '<i class="fas fa-desktop"></i>' },
+                { key: 'tablet', icon: 'fa-tablet-alt', label: 'Tablet', emoji: '<i class="fas fa-tablet-alt"></i>' },
+                { key: 'mobile', icon: 'fa-mobile-alt', label: 'Mobile', emoji: '<i class="fas fa-mobile-alt"></i>' }
             ];
             
             console.log('generateInlineViewportIconsForPages called with:', { pageData, pageKey });
@@ -4820,36 +4820,38 @@
         function createJobRow(job) {
             const row = document.createElement('tr');
             
+            // Normalize status to handle different cases and values
+            const status = job.status ? job.status.toLowerCase() : 'unknown';
+
             // Status badge styling
             let statusBadge = '';
-            switch(job.status) {
+            switch(status) {
                 case 'pending':
                     statusBadge = '<span class="status-badge" style="background: rgba(142, 144, 147, 0.1); color: var(--subtle-text);"><i class="fas fa-clock me-1"></i>Pending</span>';
                     break;
-                case 'Crawling':
+                case 'crawling':
                     statusBadge = '<span class="status-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-color);"><i class="fas fa-spider me-1"></i>Crawling</span>';
                     break;
-                case 'Crawled':
+                case 'crawled':
                     statusBadge = '<span class="status-badge" style="background: rgba(16, 185, 129, 0.1); color: var(--success-color);"><i class="fas fa-check-circle me-1"></i>Crawled</span>';
                     break;
                 case 'finding_difference':
                     statusBadge = '<span class="status-badge" style="background: rgba(147, 51, 234, 0.1); color: #9333ea;"><i class="fas fa-search-plus me-1"></i>Finding Difference</span>';
                     break;
+                case 'result':
                 case 'ready':
                     statusBadge = '<span class="status-badge" style="background: rgba(16, 185, 129, 0.1); color: var(--success-color);"><i class="fas fa-check-circle me-1"></i>Ready</span>';
                     break;
+                case 'job failed':
                 case 'diff_failed':
-                    statusBadge = '<span class="status-badge" style="background: rgba(239, 68, 68, 0.1); color: var(--danger-color);"><i class="fas fa-exclamation-triangle me-1"></i>Diff Failed</span>';
-                    break;
-                case 'Job Failed':
                     statusBadge = '<span class="status-badge" style="background: rgba(239, 68, 68, 0.1); color: var(--danger-color);"><i class="fas fa-exclamation-triangle me-1"></i>Job Failed</span>';
                     break;
                 default:
-                    statusBadge = '<span class="status-badge secondary">Unknown</span>';
+                    statusBadge = `<span class="status-badge secondary">${job.status || 'Unknown'}</span>`;
             }
             
-            // View button - enabled when status is 'Crawled' or 'ready'
-            const isViewEnabled = job.status === 'Crawled' || job.status === 'ready';
+            // View button - enabled for completed or ready statuses
+            const isViewEnabled = ['crawled', 'ready', 'result'].includes(status);
             const viewButton = isViewEnabled
                 ? `<button type="button" class="btn btn-sm btn-primary" onclick="viewJobResults(${job.job_number})" title="View discovered pages">
                      <i class="fas fa-eye me-1"></i>View
@@ -5206,9 +5208,9 @@
         // Generate viewport icons for job data based on page display status
         function generateViewportIconsForJobData(pageData, jobStatus, pageDisplayStatus) {
             const viewports = [
-                { key: 'desktop', emoji: '🖥️' },
-                { key: 'tablet', emoji: '📱' },
-                { key: 'mobile', emoji: '📲' }
+                { key: 'desktop', emoji: '<i class="fas fa-desktop"></i>' },
+                { key: 'tablet', emoji: '<i class="fas fa-tablet-alt"></i>' },
+                { key: 'mobile', emoji: '<i class="fas fa-mobile-alt"></i>' }
             ];
             
             return viewports.map(viewport => {
@@ -5428,9 +5430,9 @@
         // Generate viewport icons for history pages with job status awareness
         function generateViewportIconsForHistory(pageData, jobStatus) {
             const viewports = [
-                { key: 'desktop', emoji: '🖥️' },
-                { key: 'tablet', emoji: '📱' },
-                { key: 'mobile', emoji: '📲' }
+                { key: 'desktop', emoji: '<i class="fas fa-desktop"></i>' },
+                { key: 'tablet', emoji: '<i class="fas fa-tablet-alt"></i>' },
+                { key: 'mobile', emoji: '<i class="fas fa-mobile-alt"></i>' }
             ];
             
             return viewports.map(viewport => {

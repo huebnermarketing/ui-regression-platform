@@ -18,7 +18,7 @@ def fix_job_52():
             print("=== Fixing Job 52 ===")
             
             # Get job 52
-            job = CrawlJob.query.get(52)
+            job = db.session.get(CrawlJob, 52)
             if not job:
                 print("Job 52 not found")
                 return

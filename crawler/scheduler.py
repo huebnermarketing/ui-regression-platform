@@ -127,7 +127,7 @@ class CrawlerScheduler:
                     return
                 
                 # Get project from database
-                project = Project.query.get(project_id)
+                project = db.session.get(Project, project_id)
                 if not project:
                     current_app.logger.error(f"Project {project_id} not found")
                     return
@@ -451,7 +451,7 @@ class CrawlerScheduler:
                 current_app.logger.info(f"Starting find difference job for project {project_id}")
                 
                 # Get project from database
-                project = Project.query.get(project_id)
+                project = db.session.get(Project, project_id)
                 if not project:
                     current_app.logger.error(f"Project {project_id} not found")
                     return
@@ -490,7 +490,7 @@ class CrawlerScheduler:
                 
                 # Get the crawl job from database
                 from models.crawl_job import CrawlJob
-                crawl_job = CrawlJob.query.get(job_id)
+                crawl_job = db.session.get(CrawlJob, job_id)
                 if not crawl_job:
                     current_app.logger.error(f"CrawlJob {job_id} not found")
                     return
@@ -500,7 +500,7 @@ class CrawlerScheduler:
                     return
                 
                 # Get project from database
-                project = Project.query.get(crawl_job.project_id)
+                project = db.session.get(Project, crawl_job.project_id)
                 if not project:
                     current_app.logger.error(f"Project {crawl_job.project_id} not found")
                     return

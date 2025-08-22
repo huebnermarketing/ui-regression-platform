@@ -10,76 +10,84 @@ import pytz
 load_dotenv()
 
 # Initialize Flask app
-app = Flask(__name__)
-
-# Configuration
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-
-# Build database URI properly handling empty password and special characters
-from urllib.parse import quote_plus
-
-db_user = os.getenv('DB_USER', 'root')
-db_password = os.getenv('DB_PASSWORD', '')
-db_host = os.getenv('DB_HOST', 'localhost')
-db_name = os.getenv('DB_NAME', 'ui_diff_dashboard')
-
-if db_password:
-    # URL encode the password to handle special characters like @
-    encoded_password = quote_plus(db_password)
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{db_user}:{encoded_password}@{db_host}/{db_name}"
-else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{db_user}@{db_host}/{db_name}"
-
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Initialize extensions
-from models import db
-db.init_app(app)
-migrate = Migrate(app, db)
-
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-login_manager.login_message = 'Please log in to access this page.'
-
-# Import models after db initialization
 from models.user import User
 from models.project import Project, ProjectPage
 from models.crawl_job import CrawlJob
 
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
+def create_app(testing=False):
+    app = Flask(__name__)
 
-# Import timestamp utilities for consistent handling
-from utils.timestamp_utils import (
-    format_ist_date, format_ist_time, format_ist_datetime,
-    format_ist_short_datetime, utc_now
-)
+    # Configuration
+    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+    app.config['TESTING'] = testing
 
-# Custom Jinja2 filters for IST datetime formatting using timestamp utilities
-def to_ist_date(dt):
-    """Convert datetime to IST and format as DD/MM/YYYY"""
-    return format_ist_date(dt)
+    # Build database URI properly handling empty password and special characters
+    if testing:
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    else:
+        from urllib.parse import quote_plus
 
-def to_ist_time(dt):
-    """Convert datetime to IST and format as HH:MM AM/PM"""
-    return format_ist_time(dt)
+        db_user = os.getenv('DB_USER', 'root')
+        db_password = os.getenv('DB_PASSWORD', '')
+        db_host = os.getenv('DB_HOST', 'localhost')
+        db_name = os.getenv('DB_NAME', 'ui_diff_dashboard')
 
-def to_ist_datetime(dt):
-    """Convert datetime to IST and format as DD/MM/YYYY HH:MM AM/PM"""
-    return format_ist_datetime(dt)
+        if db_password:
+            # URL encode the password to handle special characters like @
+            encoded_password = quote_plus(db_password)
+            app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{db_user}:{encoded_password}@{db_host}/{db_name}"
+        else:
+            app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{db_user}@{db_host}/{db_name}"
 
-def to_ist_short_datetime(dt):
-    """Convert datetime to IST and format as DD/MM HH:MM AM/PM (short format)"""
-    return format_ist_short_datetime(dt)
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Register the filters with Jinja2
-app.jinja_env.filters['ist_date'] = to_ist_date
-app.jinja_env.filters['ist_time'] = to_ist_time
-app.jinja_env.filters['ist_datetime'] = to_ist_datetime
-app.jinja_env.filters['ist_short_datetime'] = to_ist_short_datetime
+    # Initialize extensions
+    from models import db
+    db.init_app(app)
+    migrate = Migrate(app, db)
 
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'login'
+    login_manager.login_message = 'Please log in to access this page.'
+
+    # Import models after db initialization
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        return db.session.get(User, int(user_id))
+
+    # Import timestamp utilities for consistent handling
+    from utils.timestamp_utils import (
+        format_ist_date, format_ist_time, format_ist_datetime,
+        format_ist_short_datetime, utc_now
+    )
+
+    # Custom Jinja2 filters for IST datetime formatting using timestamp utilities
+    def to_ist_date(dt):
+        """Convert datetime to IST and format as DD/MM/YYYY"""
+        return format_ist_date(dt)
+
+    def to_ist_time(dt):
+        """Convert datetime to IST and format as HH:MM AM/PM"""
+        return format_ist_time(dt)
+
+    def to_ist_datetime(dt):
+        """Convert datetime to IST and format as DD/MM/YYYY HH:MM AM/PM"""
+        return format_ist_datetime(dt)
+
+    def to_ist_short_datetime(dt):
+        """Convert datetime to IST and format as DD/MM HH:MM AM/PM (short format)"""
+        return format_ist_short_datetime(dt)
+
+    # Register the filters with Jinja2
+    app.jinja_env.filters['ist_date'] = to_ist_date
+    app.jinja_env.filters['ist_time'] = to_ist_time
+    app.jinja_env.filters['ist_datetime'] = to_ist_datetime
+    app.jinja_env.filters['ist_short_datetime'] = to_ist_short_datetime
+    return app
+
+app = create_app()
 # Initialize crawler scheduler (working version)
 import threading
 import time
@@ -476,7 +484,7 @@ class EnhancedWebCrawler:
         if project_id:
             try:
                 from models.project import Project
-                project = Project.query.get(project_id)
+                project = db.session.get(Project, project_id)
                 if project and hasattr(project, 'is_page_restricted'):
                     is_page_restricted = project.is_page_restricted
                     print(f"Page-restricted crawling: {'ENABLED' if is_page_restricted else 'DISABLED'}")
@@ -549,39 +557,48 @@ class WorkingCrawlerScheduler:
     
     def _recover_orphaned_jobs(self):
         """Recover jobs that were running when the application was restarted"""
-        with self.app.app_context():
-            # Find jobs that are marked as running but not in our scheduler
-            orphaned_jobs = CrawlJob.query.filter_by(status='running').all()
-            
-            for job in orphaned_jobs:
-                print(f"Found potentially orphaned running job {job.id} for project {job.project_id}")
+        try:
+            with self.app.app_context():
+                from models.crawl_job import CrawlJob
+                from sqlalchemy.exc import ProgrammingError
+
+                # Find jobs that are marked as running but not in our scheduler
+                orphaned_jobs = CrawlJob.query.filter_by(status='running').all()
                 
-                # Check if job has been running for more than 30 minutes (likely truly orphaned)
-                from datetime import datetime, timezone
-                if job.started_at:
-                    # Ensure both datetimes are timezone-aware for comparison
-                    current_time = datetime.now(timezone.utc)
-                    if job.started_at.tzinfo is None:
-                        # If job.started_at is naive, assume it's UTC
-                        job_start_time = job.started_at.replace(tzinfo=timezone.utc)
+                for job in orphaned_jobs:
+                    print(f"Found potentially orphaned running job {job.id} for project {job.project_id}")
+                    
+                    # Check if job has been running for more than 30 minutes (likely truly orphaned)
+                    from datetime import datetime, timezone
+                    if job.started_at:
+                        # Ensure both datetimes are timezone-aware for comparison
+                        current_time = datetime.now(timezone.utc)
+                        if job.started_at.tzinfo is None:
+                            # If job.started_at is naive, assume it's UTC
+                            job_start_time = job.started_at.replace(tzinfo=timezone.utc)
+                        else:
+                            job_start_time = job.started_at
+                        time_since_start = current_time - job_start_time
+                        if time_since_start.total_seconds() > 1800:  # 30 minutes
+                            print(f"Job {job.id} has been running for {time_since_start}, marking as failed")
+                            job.fail_job("Job interrupted by application restart (running too long)")
+                            db.session.commit()
+                            print(f"Marked truly orphaned job {job.id} as failed")
+                        else:
+                            print(f"Job {job.id} started recently ({time_since_start} ago), leaving as running")
+                            # Job started recently, might still be running in background - leave it alone
+                            # The orphan cleanup in crawl_queue routes will handle it if it's truly stuck
                     else:
-                        job_start_time = job.started_at
-                    time_since_start = current_time - job_start_time
-                    if time_since_start.total_seconds() > 1800:  # 30 minutes
-                        print(f"Job {job.id} has been running for {time_since_start}, marking as failed")
-                        job.fail_job("Job interrupted by application restart (running too long)")
+                        # No start time, definitely orphaned
+                        print(f"Job {job.id} has no start time, marking as failed")
+                        job.fail_job("Job interrupted by application restart (no start time)")
                         db.session.commit()
-                        print(f"Marked truly orphaned job {job.id} as failed")
-                    else:
-                        print(f"Job {job.id} started recently ({time_since_start} ago), leaving as running")
-                        # Job started recently, might still be running in background - leave it alone
-                        # The orphan cleanup in crawl_queue routes will handle it if it's truly stuck
-                else:
-                    # No start time, definitely orphaned
-                    print(f"Job {job.id} has no start time, marking as failed")
-                    job.fail_job("Job interrupted by application restart (no start time)")
-                    db.session.commit()
-                    print(f"Marked orphaned job {job.id} as failed")
+                        print(f"Marked orphaned job {job.id} as failed")
+        except ProgrammingError:
+            # This can happen if the database is not yet initialized (e.g., during tests)
+            print("Could not recover orphaned jobs: Database not initialized.")
+        except Exception as e:
+            print(f"An unexpected error occurred during orphaned job recovery: {e}")
     
     def schedule_crawl(self, project_id):
         """Start a crawl job in a background thread"""
@@ -627,7 +644,7 @@ class WorkingCrawlerScheduler:
                 print(f"Starting enhanced crawl job {job_id} for project {project_id}")
                 
                 # Get crawl job from database
-                crawl_job = CrawlJob.query.get(job_id)
+                crawl_job = db.session.get(CrawlJob, job_id)
                 if not crawl_job:
                     print(f"Crawl job {job_id} not found")
                     return
@@ -651,7 +668,7 @@ class WorkingCrawlerScheduler:
                 }
                 
                 # Get project from database
-                project = Project.query.get(project_id)
+                project = db.session.get(Project, project_id)
                 if not project:
                     print(f"Project {project_id} not found")
                     crawl_job.fail_job("Project not found")
@@ -667,7 +684,7 @@ class WorkingCrawlerScheduler:
                 # Handle pause
                 while self._should_pause(project_id):
                     with self.app.app_context():
-                        crawl_job = CrawlJob.query.get(job_id)
+                        crawl_job = db.session.get(CrawlJob, job_id)
                         crawl_job.pause()
                         db.session.commit()
                     
@@ -679,14 +696,14 @@ class WorkingCrawlerScheduler:
                     
                     if self._should_stop(project_id):
                         with self.app.app_context():
-                            crawl_job = CrawlJob.query.get(job_id)
+                            crawl_job = db.session.get(CrawlJob, job_id)
                             crawl_job.fail_job("Job stopped by user")
                             db.session.commit()
                         return
                 
                 # Resume if was paused
                 with self.app.app_context():
-                    crawl_job = CrawlJob.query.get(job_id)
+                    crawl_job = db.session.get(CrawlJob, job_id)
                     if crawl_job.status == 'paused':
                         crawl_job.start_job()
                         db.session.commit()
@@ -849,7 +866,7 @@ class WorkingCrawlerScheduler:
             try:
                 with self.app.app_context():
                     job_id = self.running_jobs[project_id]['job_id']
-                    crawl_job = CrawlJob.query.get(job_id)
+                    crawl_job = db.session.get(CrawlJob, job_id)
                     if crawl_job and crawl_job.status in ['running', 'paused']:
                         crawl_job.fail_job("Job cancelled by user")
                         db.session.commit()
@@ -889,7 +906,7 @@ class WorkingCrawlerScheduler:
             # Update database status to running
             try:
                 with self.app.app_context():
-                    crawl_job = CrawlJob.query.get(job_id)
+                    crawl_job = db.session.get(CrawlJob, job_id)
                     if crawl_job and crawl_job.status in ['paused', 'pending']:
                         crawl_job.start_job()
                         db.session.commit()
@@ -916,7 +933,7 @@ class WorkingCrawlerScheduler:
             # Immediately update database status to paused
             try:
                 with self.app.app_context():
-                    crawl_job = CrawlJob.query.get(job_id)
+                    crawl_job = db.session.get(CrawlJob, job_id)
                     if crawl_job and crawl_job.status == 'running':
                         crawl_job.pause()
                         db.session.commit()
@@ -943,7 +960,7 @@ class WorkingCrawlerScheduler:
             # Immediately update database status
             try:
                 with self.app.app_context():
-                    crawl_job = CrawlJob.query.get(job_id)
+                    crawl_job = db.session.get(CrawlJob, job_id)
                     if crawl_job and crawl_job.status in ['running', 'paused']:
                         crawl_job.fail_job("Job stopped by user")
                         db.session.commit()
@@ -992,7 +1009,7 @@ class WorkingCrawlerScheduler:
                 print(f"Starting screenshot capture job {job_id} for project {project_id}")
                 
                 # Get crawl job from database
-                crawl_job = CrawlJob.query.get(job_id)
+                crawl_job = db.session.get(CrawlJob, job_id)
                 if not crawl_job:
                     print(f"Screenshot job {job_id} not found")
                     return
@@ -1017,7 +1034,7 @@ class WorkingCrawlerScheduler:
                 }
                 
                 # Get project from database
-                project = Project.query.get(project_id)
+                project = db.session.get(Project, project_id)
                 if not project:
                     print(f"Project {project_id} not found")
                     crawl_job.fail_job("Project not found")
@@ -1033,7 +1050,7 @@ class WorkingCrawlerScheduler:
                 # Handle pause
                 while self._should_pause(project_id):
                     with self.app.app_context():
-                        crawl_job = CrawlJob.query.get(job_id)
+                        crawl_job = db.session.get(CrawlJob, job_id)
                         crawl_job.pause()
                         db.session.commit()
                     
@@ -1045,14 +1062,14 @@ class WorkingCrawlerScheduler:
                     
                     if self._should_stop(project_id):
                         with self.app.app_context():
-                            crawl_job = CrawlJob.query.get(job_id)
+                            crawl_job = db.session.get(CrawlJob, job_id)
                             crawl_job.fail_job("Job stopped by user")
                             db.session.commit()
                         return
                 
                 # Resume if was paused
                 with self.app.app_context():
-                    crawl_job = CrawlJob.query.get(job_id)
+                    crawl_job = db.session.get(CrawlJob, job_id)
                     if crawl_job.status == 'paused':
                         crawl_job.start_job()
                         db.session.commit()
@@ -1178,7 +1195,7 @@ class WorkingCrawlerScheduler:
                 print(f"Starting diff generation job {job_id} for project {project_id}")
                 
                 # Get crawl job from database
-                crawl_job = CrawlJob.query.get(job_id)
+                crawl_job = db.session.get(CrawlJob, job_id)
                 if not crawl_job:
                     print(f"Diff job {job_id} not found")
                     return
@@ -1203,7 +1220,7 @@ class WorkingCrawlerScheduler:
                 }
                 
                 # Get project from database
-                project = Project.query.get(project_id)
+                project = db.session.get(Project, project_id)
                 if not project:
                     print(f"Project {project_id} not found")
                     crawl_job.fail_job("Project not found")
@@ -1219,7 +1236,7 @@ class WorkingCrawlerScheduler:
                 # Handle pause
                 while self._should_pause(project_id):
                     with self.app.app_context():
-                        crawl_job = CrawlJob.query.get(job_id)
+                        crawl_job = db.session.get(CrawlJob, job_id)
                         crawl_job.pause()
                         db.session.commit()
                     
@@ -1231,14 +1248,14 @@ class WorkingCrawlerScheduler:
                     
                     if self._should_stop(project_id):
                         with self.app.app_context():
-                            crawl_job = CrawlJob.query.get(job_id)
+                            crawl_job = db.session.get(CrawlJob, job_id)
                             crawl_job.fail_job("Job stopped by user")
                             db.session.commit()
                         return
                 
                 # Resume if was paused
                 with self.app.app_context():
-                    crawl_job = CrawlJob.query.get(job_id)
+                    crawl_job = db.session.get(CrawlJob, job_id)
                     if crawl_job.status == 'paused':
                         crawl_job.start_job()
                         db.session.commit()
@@ -1364,7 +1381,7 @@ class WorkingCrawlerScheduler:
                 print(f"Starting Find Difference job {job_id} for project {project_id}")
                 
                 # Get crawl job from database
-                crawl_job = CrawlJob.query.get(job_id)
+                crawl_job = db.session.get(CrawlJob, job_id)
                 if not crawl_job:
                     print(f"Find Difference job {job_id} not found")
                     return
@@ -1389,7 +1406,7 @@ class WorkingCrawlerScheduler:
                 }
                 
                 # Get project from database
-                project = Project.query.get(project_id)
+                project = db.session.get(Project, project_id)
                 if not project:
                     print(f"Project {project_id} not found")
                     crawl_job.fail_job("Project not found")
@@ -1405,7 +1422,7 @@ class WorkingCrawlerScheduler:
                 # Handle pause
                 while self._should_pause(project_id):
                     with self.app.app_context():
-                        crawl_job = CrawlJob.query.get(job_id)
+                        crawl_job = db.session.get(CrawlJob, job_id)
                         crawl_job.pause()
                         db.session.commit()
                     
@@ -1417,14 +1434,14 @@ class WorkingCrawlerScheduler:
                     
                     if self._should_stop(project_id):
                         with self.app.app_context():
-                            crawl_job = CrawlJob.query.get(job_id)
+                            crawl_job = db.session.get(CrawlJob, job_id)
                             crawl_job.fail_job("Job stopped by user")
                             db.session.commit()
                         return
                 
                 # Resume if was paused
                 with self.app.app_context():
-                    crawl_job = CrawlJob.query.get(job_id)
+                    crawl_job = db.session.get(CrawlJob, job_id)
                     if crawl_job.status == 'paused':
                         crawl_job.start_job()
                         db.session.commit()
@@ -1557,13 +1574,13 @@ class WorkingCrawlerScheduler:
                 print(f"Starting manual page capture job {job_id} for project {project_id}, page {page_id}")
                 
                 # Get crawl job from database
-                crawl_job = CrawlJob.query.get(job_id)
+                crawl_job = db.session.get(CrawlJob, job_id)
                 if not crawl_job:
                     print(f"Manual page capture job {job_id} not found")
                     return
                 
                 # Get page from database
-                page = ProjectPage.query.get(page_id)
+                page = db.session.get(ProjectPage, page_id)
                 if not page or page.project_id != project_id:
                     print(f"Page {page_id} not found or doesn't belong to project {project_id}")
                     crawl_job.fail_job("Page not found or access denied")
@@ -1696,7 +1713,7 @@ class WorkingCrawlerScheduler:
                 if crawl_job:
                     crawl_job.fail_job(str(e))
                     # Update page status to failed
-                    page = ProjectPage.query.get(page_id)
+                    page = db.session.get(ProjectPage, page_id)
                     if page:
                         page.find_diff_status = 'failed'
                     db.session.commit()
@@ -1750,7 +1767,7 @@ class WorkingCrawlerScheduler:
         # Get the project_id from the job
         with self.app.app_context():
             from models.crawl_job import CrawlJob
-            crawl_job = CrawlJob.query.get(job_id)
+            crawl_job = db.session.get(CrawlJob, job_id)
             if not crawl_job:
                 print(f"CrawlJob {job_id} not found")
                 return None
@@ -1805,7 +1822,7 @@ class WorkingCrawlerScheduler:
                 
                 # Get the crawl job from database
                 from models.crawl_job import CrawlJob
-                crawl_job = CrawlJob.query.get(job_id)
+                crawl_job = db.session.get(CrawlJob, job_id)
                 if not crawl_job:
                     print(f"CrawlJob {job_id} not found")
                     return
@@ -1827,7 +1844,7 @@ class WorkingCrawlerScheduler:
                 
                 # Get project from database
                 from models.project import Project
-                project = Project.query.get(crawl_job.project_id)
+                project = db.session.get(Project, crawl_job.project_id)
                 if not project:
                     print(f"Project {crawl_job.project_id} not found")
                     crawl_job.fail_find_difference("Project not found")
@@ -2077,11 +2094,14 @@ def dashboard():
 
 if __name__ == '__main__':
     with app.app_context():
+        from models import db
+        from models.user import User
         db.create_all()
         
         # Create a demo user if it doesn't exist
         if not User.query.filter_by(username='demo').first():
-            demo_user = User(username='demo', password='demo123')
+            demo_user = User(username='demo')
+            demo_user.set_password('demo123')
             db.session.add(demo_user)
             db.session.commit()
             print("Demo user created: username='demo', password='demo123'")
@@ -2089,4 +2109,4 @@ if __name__ == '__main__':
     print("Starting UI Diff Dashboard with MySQL...")
     print("Access the application at: http://localhost:5001")
     print("Demo credentials: username='demo', password='demo123'")
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    app.run(debug=True, host='0.0.0.0', port=5001, use_reloader=False)

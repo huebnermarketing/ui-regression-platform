@@ -1,5 +1,6 @@
 from datetime import datetime
 from models import db
+import hashlib
 
 class Project(db.Model):
     __tablename__ = 'projects'
@@ -36,7 +37,7 @@ class ProjectPage(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
-    path = db.Column(db.String(255), nullable=False)
+    path = db.Column(db.String(767), nullable=False)
     page_name = db.Column(db.String(500), nullable=True)  # New column for page title
     staging_url = db.Column(db.Text, nullable=False)
     production_url = db.Column(db.Text, nullable=False)
@@ -110,7 +111,7 @@ class ProjectPage(db.Model):
     
     # Unique constraint for path per project
     __table_args__ = (db.UniqueConstraint('project_id', 'path', name='unique_path_per_project'),)
-    
+
     def __init__(self, project_id, path, staging_url, production_url, page_name=None):
         self.project_id = project_id
         self.path = path

@@ -80,7 +80,7 @@ def get_user_by_username(username: str) -> User:
 
 def get_user_by_id(user_id: int) -> User:
     """Get user by ID"""
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         raise ValueError(f"User with ID {user_id} not found")
     return user

@@ -415,7 +415,7 @@ def register_project_routes(app, crawler_scheduler):
             if job_id:
                 # This is a find difference request for an existing crawled job
                 from models.crawl_job import CrawlJob
-                crawl_job = CrawlJob.query.get(job_id)
+                crawl_job = db.session.get(CrawlJob, job_id)
                 
                 if not crawl_job or crawl_job.project_id != project_id:
                     flash('Invalid job ID.', 'error')
@@ -912,7 +912,7 @@ def register_project_routes(app, crawler_scheduler):
     @app.route('/api/projects/<int:project_id>/jobs')
     @login_required
     def get_jobs_history(project_id):
-        """Get jobs history for a project with proper status-based page filtering"""
+        """Get jobs history for a project with unified status display"""
         try:
             # Verify project access
             project = Project.query.filter_by(
@@ -930,47 +930,45 @@ def register_project_routes(app, crawler_scheduler):
             from models.crawl_job import CrawlJob
             jobs = CrawlJob.query.filter_by(project_id=project_id).order_by(CrawlJob.job_number.desc()).all()
             
-            # Get all pages for this project with their current status
+            # Get the unified project status from RunStateService
+            from services.run_state_service import RunStateService
+            run_state_service = RunStateService(crawler_scheduler)
+            project_run_state = run_state_service.get_project_run_state(project_id)
+            unified_project_status = project_run_state.get('state', 'not_started')
+
+            # Get all pages for this project
             pages = ProjectPage.query.filter_by(project_id=project_id).all()
             
-            # Convert jobs to the format expected by frontend with proper status handling
             jobs_data = []
-            for job in jobs:
-                # Format updated_at in IST timezone: MMM DD, YYYY, hh:mm AM/PM
+            for i, job in enumerate(jobs):
+                # Format updated_at timestamp
                 updated_at_formatted = format_jobs_history_datetime(job.updated_at)
                 
-                # Determine page count and status based on job status
-                if job.status == 'Crawled':
-                    # For Crawled jobs: show only crawled pages, no duration/results
-                    job_pages = len(pages)  # All discovered pages
-                    page_display_status = 'crawled'
-                elif job.status == 'ready':
-                    # For Ready jobs: show pages with diff results
-                    ready_pages = [p for p in pages if any([
-                        p.diff_status_desktop == 'completed',
-                        p.diff_status_tablet == 'completed',
-                        p.diff_status_mobile == 'completed'
-                    ])]
-                    job_pages = len(ready_pages)
-                    page_display_status = 'ready'
-                elif job.status in ['Job Failed', 'diff_failed']:
-                    # For Failed jobs: show all pages with mixed statuses
-                    job_pages = len(pages)
-                    page_display_status = 'failed'
+                # Determine the display status for consistency
+                display_status = job.status
+                if i == 0:
+                    # For the most recent job, use the unified project status
+                    display_status = unified_project_status
                 else:
-                    # Default case
-                    job_pages = job.total_pages or len(pages)
-                    page_display_status = 'unknown'
-                
+                    # For older jobs, map to a consistent status vocabulary
+                    if job.status == 'ready' or job.status == 'completed':
+                        display_status = 'Result'
+                    elif job.status == 'diff_failed':
+                        display_status = 'Job Failed'
+
+                # Determine page count based on job status
+                job_pages = job.total_pages or 0
+                if job.status == 'Crawled' and not job.total_pages:
+                    job_pages = len(pages)
+
                 jobs_data.append({
                     'id': job.id,
                     'job_number': job.job_number,
-                    'status': job.status,
+                    'status': display_status,
                     'updated_at': updated_at_formatted,
                     'pages': job_pages,
                     'startTime': job.created_at.isoformat() if job.created_at else None,
                     'endTime': job.completed_at.isoformat() if job.completed_at else None,
-                    'page_display_status': page_display_status  # NEW: How to display pages for this job
                 })
             
             return jsonify({
@@ -988,7 +986,7 @@ def register_project_routes(app, crawler_scheduler):
     @app.route('/api/projects/<int:project_id>/start-crawl-job', methods=['POST'])
     @login_required
     def start_crawl_job(project_id):
-        """Start a new crawling job with job tracking"""
+        """Start a new crawling job with job tracking and stuck job detection"""
         try:
             # Verify project access
             project = Project.query.filter_by(
@@ -1002,11 +1000,31 @@ def register_project_routes(app, crawler_scheduler):
                     'message': 'Project not found or access denied'
                 }), 404
             
-            # Check if there's already an active job (Crawling or pending status) for this project
+            # Check for and fail stuck jobs before starting a new one
             from models.crawl_job import CrawlJob
+            from datetime import datetime, timedelta
+
+            stuck_jobs = CrawlJob.query.filter(
+                CrawlJob.project_id == project_id,
+                CrawlJob.status.in_(['Crawling', 'finding_difference']),
+                CrawlJob.updated_at < datetime.utcnow() - timedelta(minutes=10)
+            ).all()
+
+            if stuck_jobs:
+                for job in stuck_jobs:
+                    job.status = 'Job Failed'
+                    job.error_message = 'Job marked as failed due to being stuck.'
+                    job.completed_at = datetime.utcnow()
+                db.session.commit()
+                return jsonify({
+                    'success': False,
+                    'message': 'A previously stuck job was found and marked as failed. You can now start a new job.'
+                }), 409
+
+            # Check if there's already an active job (Crawling or pending status) for this project
             running_job = CrawlJob.query.filter_by(
                 project_id=project_id
-            ).filter(CrawlJob.status.in_(['Crawling', 'pending'])).first()
+            ).filter(CrawlJob.status.in_(['Crawling', 'pending', 'finding_difference'])).first()
             
             if running_job:
                 return jsonify({

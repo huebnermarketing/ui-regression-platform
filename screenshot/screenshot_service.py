@@ -241,7 +241,7 @@ class ScreenshotService:
         """
         try:
             # Get page from database
-            page = ProjectPage.query.get(page_id)
+            page = db.session.get(ProjectPage, page_id)
             if not page:
                 self.logger.error(f"Page {page_id} not found")
                 return False
@@ -357,7 +357,7 @@ class ScreenshotService:
             for page_id in page_ids:
                 try:
                     # Get page from database
-                    page = ProjectPage.query.get(page_id)
+                    page = db.session.get(ProjectPage, page_id)
                     if not page:
                         self.logger.error(f"Page {page_id} not found")
                         failed_count += 1

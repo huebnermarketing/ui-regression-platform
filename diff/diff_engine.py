@@ -443,7 +443,7 @@ class VisualDiffEngine:
         """
         try:
             # Get page from database
-            page = ProjectPage.query.get(page_id)
+            page = db.session.get(ProjectPage, page_id)
             if not page:
                 self.logger.error(f"Page {page_id} not found")
                 return False
@@ -544,7 +544,7 @@ class VisualDiffEngine:
         except Exception as e:
             self.logger.error(f"Error processing diff for page {page_id}: {str(e)}")
             try:
-                page = ProjectPage.query.get(page_id)
+                page = db.session.get(ProjectPage, page_id)
                 if page:
                     page.status = 'diff_failed'
                     page.diff_error = str(e)

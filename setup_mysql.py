@@ -62,7 +62,8 @@ def create_tables_and_user():
             sys.path.insert(0, '.')
             
         # Import Flask app
-        from app import app, db
+        from app import app
+        from models import db
         from models.user import User
         
         print("Checking database connection...")

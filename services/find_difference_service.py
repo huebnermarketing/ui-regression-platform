@@ -110,7 +110,7 @@ class FindDifferenceService:
             viewports = self.viewport_order.copy()
         
         # Get page from database
-        page = ProjectPage.query.get(page_id)
+        page = db.session.get(ProjectPage, page_id)
         if not page:
             self.logger.error(f"Page {page_id} not found")
             return {viewport: False for viewport in viewports}
@@ -175,7 +175,7 @@ class FindDifferenceService:
             viewports = self.viewport_order.copy()
         
         # Get page from database
-        page = ProjectPage.query.get(page_id)
+        page = db.session.get(ProjectPage, page_id)
         if not page:
             self.logger.error(f"Page {page_id} not found")
             return {viewport: {'success': False, 'error': 'Page not found'} for viewport in viewports}
@@ -198,7 +198,7 @@ class FindDifferenceService:
             Dict[str, Dict]: Results per viewport with metrics and status
         """
         # Get page from database
-        page = ProjectPage.query.get(page_id)
+        page = db.session.get(ProjectPage, page_id)
         if not page:
             self.logger.error(f"Page {page_id} not found")
             return {viewport: {'success': False, 'error': 'Page not found'} for viewport in viewports}
@@ -712,7 +712,7 @@ class FindDifferenceService:
         self.logger.info(f"Starting capture-only for page {page_id} (run: {run_id})")
         
         # Get page from database
-        page = ProjectPage.query.get(page_id)
+        page = db.session.get(ProjectPage, page_id)
         if not page:
             self.logger.error(f"Page {page_id} not found")
             return {
@@ -845,7 +845,7 @@ class FindDifferenceService:
         self.logger.info(f"Starting enhanced capture+diff for page {page_id} (run: {run_id})")
         
         # Get page from database
-        page = ProjectPage.query.get(page_id)
+        page = db.session.get(ProjectPage, page_id)
         if not page:
             self.logger.error(f"Page {page_id} not found")
             return {
@@ -985,7 +985,7 @@ class FindDifferenceService:
             Dict: Result with success status and details
         """
         # Get page to determine project_id
-        page = ProjectPage.query.get(page_id)
+        page = db.session.get(ProjectPage, page_id)
         if not page:
             return {
                 'success': False,

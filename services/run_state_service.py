@@ -244,7 +244,7 @@ class RunStateService:
             elif latest_running.job_type in ['find_difference', 'screenshot', 'diff']:
                 state = 'finding_difference'
                 description = 'Processing screenshots and generating visual differences'
-            elif latest_running.job_type == 'crawl':
+            elif latest_running.job_type in ['crawl', 'full_crawl']:
                 state = 'crawling'
                 description = 'Discovering pages on the website'
             else:
@@ -287,7 +287,7 @@ class RunStateService:
         # Fallback to database info
         total_pages = ProjectPage.query.filter_by(project_id=project_id).count()
         
-        if job.job_type == 'crawl':
+        if job.job_type in ['crawl', 'full_crawl']:
             # For crawl jobs, pages_done is the number of pages discovered so far
             pages_done = total_pages
             progress = min(100, (pages_done / max(1, job.total_pages or 1)) * 100) if job.total_pages else 0
@@ -408,7 +408,7 @@ class RunStateService:
         
         # Check for crawled state - crawl completed with pages
         # FIXED: Only show crawled if there are no ready jobs (to ensure consistency)
-        crawl_jobs = [job for job in completed_jobs if job.job_type == 'crawl' and job.status == 'Crawled']
+        crawl_jobs = [job for job in completed_jobs if job.job_type in ['crawl', 'full_crawl'] and job.status == 'Crawled']
         if crawl_jobs and pages and not ready_jobs:
             # Sort by creation time (most recent first)
             crawl_jobs.sort(key=lambda x: x.created_at, reverse=True)
