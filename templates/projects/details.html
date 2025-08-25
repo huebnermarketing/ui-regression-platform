@@ -2353,7 +2353,7 @@
                         if (diffPct !== null && diffPct !== undefined) {
                             displayText = `${Number(diffPct).toFixed(1)}%`;
                             color = diffPct > 5 ? 'var(--danger-color)' : diffPct > 1 ? 'var(--warning-color)' : 'var(--success-color)';
-                            title = `${viewport} - ${diffPct.toFixed(2)}% difference`;
+                            title = `${viewport} - ${Number(diffPct).toFixed(2)}% difference`;
                         } else {
                             displayText = '0.0%';
                             color = 'var(--success-color)';
@@ -3044,7 +3044,7 @@
                 let diffText = '';
                 let diffColor = 'var(--subtle-text)';
                 if (status === 'completed' && diffPct !== null && diffPct !== undefined) {
-                    diffText = `${diffPct.toFixed(1)}%`;
+                    diffText = `${Number(diffPct).toFixed(1)}%`;
                     diffColor = diffPct > 5 ? 'var(--danger-color)' : diffPct > 1 ? 'var(--warning-color)' : 'var(--success-color)';
                 } else if (status === 'failed') {
                     diffText = '!';
@@ -3122,7 +3122,7 @@
                 let diffBadge = '';
                 if (status === 'completed' && diffPct !== null && diffPct !== undefined) {
                     const badgeClass = diffPct > 5 ? 'bg-danger' : diffPct > 1 ? 'bg-warning' : 'bg-success';
-                    diffBadge = `<span class="badge ${badgeClass} diff-badge">${diffPct.toFixed(1)}%</span>`;
+                    diffBadge = `<span class="badge ${badgeClass} diff-badge">${Number(diffPct).toFixed(1)}%</span>`;
                 } else if (status === 'failed') {
                     diffBadge = '<span class="badge bg-danger diff-badge">!</span>';
                 } else if (status === 'no_baseline') {
@@ -4023,7 +4023,7 @@
                 let diffBadge = '';
                 if (status === 'completed' && diffPct !== null && diffPct !== undefined) {
                     const badgeClass = diffPct > 5 ? 'bg-danger' : diffPct > 1 ? 'bg-warning' : 'bg-success';
-                    diffBadge = `<span class="badge ${badgeClass} diff-badge-inline">${diffPct.toFixed(1)}%</span>`;
+                    diffBadge = `<span class="badge ${badgeClass} diff-badge-inline">${Number(diffPct).toFixed(1)}%</span>`;
                 } else if (status === 'failed') {
                     diffBadge = '<span class="badge bg-danger diff-badge-inline">!</span>';
                 } else if (status === 'no_baseline') {
@@ -4871,15 +4871,15 @@
             return row;
         }
 
-        // View job results - fetch and display job-specific pages using new API endpoint
+        // FIXED: View job results - now uses job→run resolver and run-centric history endpoint
         function viewJobResults(jobNumber) {
-            console.log(`🎯 View job results clicked for job #${jobNumber}`);
+            console.log(`🎯 View job results clicked for job #${jobNumber} - using run-centric approach`);
             
             // Show loading state
-            showToast('info', `Loading pages for Job #${jobNumber}...`);
+            showToast('info', `Resolving Job #${jobNumber} to run data...`);
             
-            // Use the new job-specific pages API endpoint
-            fetch(`/api/projects/${currentProjectId}/jobs/${jobNumber}/pages`, {
+            // Step 1: Resolve job_id to run_id using the new resolver endpoint
+            fetch(`/api/projects/${currentProjectId}/jobs/${jobNumber}/resolve`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4890,20 +4890,48 @@
                 .then(response => {
                     return response.json().then(data => {
                         if (!response.ok) {
-                            // Use the server's error message if available
                             const errorMessage = data.error || data.message || `HTTP ${response.status}: ${response.statusText}`;
                             throw new Error(errorMessage);
                         }
                         return data;
                     });
                 })
-                .then(jobData => {
-                    if (jobData.success && jobData.pages) {
-                        console.log(`✅ Got ${jobData.pages.length} pages for job #${jobNumber}`);
-                        console.log(`📊 Job status: ${jobData.job_status}, Page display status: ${jobData.page_display_status}`);
+                .then(resolverData => {
+                    if (resolverData.success && resolverData.run_id) {
+                        console.log(`✅ Job #${jobNumber} resolved to run_id: ${resolverData.run_id}`);
                         
-                        if (jobData.pages.length === 0) {
-                            showToast('warning', `Job #${jobNumber} has no pages to display. This might be because the job failed or no pages were crawled.`);
+                        // Update loading message
+                        showToast('info', `Loading history for run ${resolverData.run_id}...`);
+                        
+                        // Step 2: Use the run-centric history endpoint to get pages
+                        return fetch(`/api/history/project/${currentProjectId}/run/${resolverData.run_id}/pages`, {
+                            method: 'GET',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            credentials: 'include'
+                        })
+                        .then(response => {
+                            return response.json().then(data => {
+                                if (!response.ok) {
+                                    const errorMessage = data.error || data.message || `HTTP ${response.status}: ${response.statusText}`;
+                                    throw new Error(errorMessage);
+                                }
+                                return { ...data, resolverData }; // Include resolver data for context
+                            });
+                        });
+                    } else {
+                        throw new Error(resolverData.error || 'Failed to resolve job to run_id');
+                    }
+                })
+                .then(historyData => {
+                    if (historyData.success && historyData.pages) {
+                        console.log(`✅ Got ${historyData.pages.length} pages from run-centric history for job #${jobNumber}`);
+                        console.log(`📊 Run ID: ${historyData.resolverData.run_id}, Job status: ${historyData.resolverData.job_status}`);
+                        
+                        if (historyData.pages.length === 0) {
+                            showToast('warning', `Job #${jobNumber} has no pages to display. The run may not have completed successfully.`);
                             return;
                         }
                         
@@ -4929,40 +4957,387 @@
                             }, 3000);
                         }
                         
-                        // Replace the Discovered Pages table with job-specific pages
-                        replaceDiscoveredPagesWithJobData(jobData, jobNumber);
+                        // Replace the Discovered Pages table with run-centric history data
+                        replaceDiscoveredPagesWithRunHistory(historyData, jobNumber, historyData.resolverData.run_id);
                         
-                        // Show success message with job status information
-                        const statusMessage = jobData.page_display_status === 'crawled'
-                            ? 'crawled pages (no duration/results available)'
-                            : jobData.page_display_status === 'ready'
-                            ? 'pages with completed results'
-                            : jobData.page_display_status === 'failed'
-                            ? 'pages with mixed statuses'
-                            : 'pages';
+                        // Show success message with run information
+                        const duration = historyData.duration || 'N/A';
+                        const jobStatus = historyData.resolverData.job_status || 'unknown';
                         
-                        showToast('success', `Showing ${jobData.pages.length} ${statusMessage} from Job #${jobNumber} (${jobData.job_status} status).`);
+                        showToast('success', `Showing ${historyData.pages.length} pages from Job #${jobNumber} (Run: ${historyData.resolverData.run_id}, Status: ${jobStatus}, Duration: ${duration}).`);
                         
                     } else {
-                        throw new Error(jobData.error || jobData.message || 'No pages found for this job');
+                        throw new Error(historyData.error || 'No pages found for this run');
                     }
                 })
                 .catch(error => {
-                    console.error(`❌ Error loading job pages for #${jobNumber}:`, error);
+                    console.error(`❌ Error loading run-centric history for job #${jobNumber}:`, error);
                     
                     // Provide more specific error messages based on common scenarios
                     let userMessage = error.message;
                     
                     if (error.message.includes('not found')) {
-                        userMessage = `Job #${jobNumber} was not found. It may have been deleted or doesn't exist.`;
+                        userMessage = `Job #${jobNumber} was not found or has no associated run data.`;
+                    } else if (error.message.includes('No run_id found')) {
+                        userMessage = `Job #${jobNumber} has no run data available. The job may not have completed successfully.`;
                     } else if (error.message.includes('HTTP 404')) {
-                        userMessage = `Job #${jobNumber} was not found in the database.`;
+                        userMessage = `Job #${jobNumber} or its run data was not found.`;
                     } else if (error.message.includes('HTTP 500')) {
                         userMessage = `Server error while loading Job #${jobNumber}. Please try again.`;
                     }
                     
                     showToast('error', userMessage);
                 });
+        }
+        
+        // Replace the discovered pages table with run-centric history data
+        function replaceDiscoveredPagesWithRunHistory(historyData, jobNumber, runId) {
+            const historyPages = historyData.pages || [];
+            const duration = historyData.duration || 'N/A';
+            const actualJobNumber = historyData.job_number || jobNumber;
+            
+            console.log(`🔄 Replacing discovered pages table with ${historyPages.length} run-centric history pages, duration: ${duration}, job: ${actualJobNumber}, run: ${runId}`);
+            
+            // Get the DISCOVERED PAGES table body specifically (not the jobs history table)
+            const discoveredPagesSection = document.getElementById('discovered-pages-section');
+            if (!discoveredPagesSection) {
+                console.error('❌ Discovered pages section not found');
+                return;
+            }
+            
+            const tableBody = discoveredPagesSection.querySelector('.modern-table tbody');
+            if (!tableBody) {
+                console.error('❌ Discovered pages table body not found');
+                return;
+            }
+            
+            // Store original rows for restoration
+            if (!window.originalDiscoveredPages) {
+                window.originalDiscoveredPages = Array.from(tableBody.children).map(row => row.cloneNode(true));
+                console.log(`💾 Stored ${window.originalDiscoveredPages.length} original rows`);
+            }
+            
+            // Clear current table
+            tableBody.innerHTML = '';
+            
+            // Group pages by path to avoid duplicates across viewports
+            const groupedPages = {};
+            historyPages.forEach(page => {
+                const key = page.path || '/';
+                if (!groupedPages[key]) {
+                    groupedPages[key] = {
+                        id: page.id,
+                        page_name: page.page_name,
+                        path: page.path,
+                        staging_url: page.staging_url,
+                        production_url: page.production_url,
+                        last_run_at: page.last_run_at,
+                        find_diff_status: 'ready', // History pages are completed
+                        duration_formatted: duration, // Use duration from API response
+                        run_id: runId, // Store the run ID for image URLs
+                        viewports: {
+                            desktop: { status: 'pending', diff_percentage: null },
+                            tablet: { status: 'pending', diff_percentage: null },
+                            mobile: { status: 'pending', diff_percentage: null }
+                        }
+                    };
+                }
+                
+                // Update viewport data
+                ['desktop', 'tablet', 'mobile'].forEach(viewport => {
+                    const status = page[`diff_status_${viewport}`];
+                    const diffPct = page[`diff_mismatch_pct_${viewport}`];
+                    
+                    if (status) {
+                        groupedPages[key].viewports[viewport] = {
+                            status: status,
+                            diff_percentage: diffPct
+                        };
+                    }
+                });
+            });
+            
+            // Create table rows for grouped pages
+            const groupedPagesArray = Object.values(groupedPages);
+            groupedPagesArray.forEach(pageData => {
+                const row = createRunHistoryPageRow(pageData, duration, actualJobNumber, runId);
+                tableBody.appendChild(row);
+            });
+            
+            // Update table header to show it's filtered
+            updateTableHeaderForRunHistory(actualJobNumber, groupedPagesArray.length, runId);
+            
+            console.log(`✅ Created ${groupedPagesArray.length} run-centric history page rows`);
+        }
+        
+        // Create a table row for a run-centric history page
+        function createRunHistoryPageRow(pageData, duration, jobNumber, runId) {
+            const row = document.createElement('tr');
+            row.style.backgroundColor = 'rgba(59, 130, 246, 0.05)'; // Light blue background to indicate run-centric history
+            
+            // Generate viewport icons with proper click handlers for run-centric history
+            const viewportIconsHtml = generateViewportIconsForRunHistory(pageData, jobNumber);
+            
+            // Format last run date using the job's timestamp
+            const lastRunFormatted = pageData.last_run_at ?
+                new Date(pageData.last_run_at).toLocaleDateString('en-GB', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                }) : 'Never';
+            
+            const lastRunTime = pageData.last_run_at ?
+                new Date(pageData.last_run_at).toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                }) : '';
+            
+            row.innerHTML = `
+                <td class="text-center">
+                    <input type="checkbox" class="form-check-input" disabled title="Run history record">
+                </td>
+                <td class="breadcrumb-cell">
+                    <div class="page-breadcrumb">
+                        <div class="page-title">${pageData.page_name || pageData.path || 'Untitled Page'}</div>
+                        <div class="page-path">
+                            <code>${pageData.path || '/'}</code>
+                        </div>
+                    </div>
+                </td>
+                <td class="url-cell">
+                    ${pageData.staging_url ?
+                        `<a href="${pageData.staging_url}" target="_blank" class="url-link">
+                            ${pageData.staging_url}
+                            <i class="fas fa-external-link-alt ms-1"></i>
+                        </a>` :
+                        '<small class="text-muted">No URL available</small>'
+                    }
+                </td>
+                <td class="url-cell">
+                    ${pageData.production_url ?
+                        `<a href="${pageData.production_url}" target="_blank" class="url-link">
+                            ${pageData.production_url}
+                            <i class="fas fa-external-link-alt ms-1"></i>
+                        </a>` :
+                        '<small class="text-muted">No URL available</small>'
+                    }
+                </td>
+                <td>
+                    <span class="status-badge" style="background: rgba(16, 185, 129, 0.1); color: var(--success-color);">
+                        <i class="fas fa-check-circle me-1"></i>READY
+                    </span>
+                </td>
+                <td>
+                    ${duration && duration !== 'N/A' ?
+                        `<span style="color: var(--primary-text); font-weight: 500; font-family: 'Courier New', monospace;">
+                            ${duration}
+                        </span>` :
+                        '<small style="color: var(--subtle-text);">-</small>'
+                    }
+                </td>
+                <td>
+                    <div class="d-flex flex-column">
+                        <small style="color: var(--primary-text); font-weight: 500;">${lastRunFormatted}</small>
+                        <small style="color: var(--subtle-text); font-size: 0.75rem;">${lastRunTime}</small>
+                    </div>
+                </td>
+                <td>
+                    <div class="viewport-icons-inline d-flex gap-1 justify-content-center">
+                        ${viewportIconsHtml}
+                    </div>
+                </td>
+            `;
+            
+            return row;
+        }
+        
+        // Generate viewport icons for run-centric history pages
+        function generateViewportIconsForRunHistory(pageData, jobStatus) {
+            const viewports = [
+                { key: 'desktop', emoji: '<i class="fas fa-desktop"></i>' },
+                { key: 'tablet', emoji: '<i class="fas fa-tablet-alt"></i>' },
+                { key: 'mobile', emoji: '<i class="fas fa-mobile-alt"></i>' }
+            ];
+            
+            return viewports.map(viewport => {
+                const viewportData = pageData.viewports ? pageData.viewports[viewport.key] : null;
+                const status = viewportData?.status || pageData[`diff_status_${viewport.key}`] || 'pending';
+                const diffPct = viewportData?.diff_percentage || pageData[`diff_mismatch_pct_${viewport.key}`];
+                
+                let diffText = '';
+                let diffColor = 'var(--subtle-text)';
+                let titleText = '';
+                
+                // Handle status based on job status and actual viewport data
+                if (status === 'completed' && diffPct !== null && diffPct !== undefined) {
+                    diffText = `${Number(diffPct).toFixed(1)}%`;
+                    diffColor = diffPct > 5 ? 'var(--danger-color)' : diffPct > 1 ? 'var(--warning-color)' : 'var(--success-color)';
+                    titleText = `${viewport.key} - ${Number(diffPct).toFixed(2)}% difference`;
+                } else if (status === 'failed') {
+                    diffText = '!';
+                    diffColor = 'var(--danger-color)';
+                    titleText = `${viewport.key} - Failed`;
+                } else if (status === 'no_baseline') {
+                    diffText = '?';
+                    diffColor = 'var(--warning-color)';
+                    titleText = `${viewport.key} - No Baseline`;
+                } else if (jobStatus === "Crawled" || status === 'captured') {
+                    // For crawled jobs, show crawled status
+                    diffText = 'CRAWLED';
+                    diffColor = 'var(--info-color)';
+                    titleText = `${viewport.key} - Crawled (click to view images)`;
+                } else if (status === 'ready' || jobStatus === "ready") {
+                    diffText = '0.0%';
+                    diffColor = 'var(--success-color)';
+                    titleText = `${viewport.key} - Ready`;
+                } else {
+                    // Default status
+                    diffText = '-';
+                    diffColor = 'var(--subtle-text)';
+                    titleText = `${viewport.key} - ${status || 'Unknown'}`;
+                }
+                
+                // History pages should always be clickable to view images
+                const isClickable = true;
+                const buttonClass = 'viewport-icon-inline clickable';
+                const cursor = 'cursor: pointer;';
+                
+                // Get the current run timestamp for proper image URL generation
+                const runTimestamp = pageData.run_id || (currentRunData ? currentRunData.timestamp : 'current');
+                
+                // Safely escape data attributes
+                const safePageId = String(pageData.id || '');
+                const safePageName = String(pageData.page_name || pageData.path || 'Untitled Page').replace(/'/g, '&#39;');
+                const safePagePath = String(pageData.path || '/').replace(/'/g, '&#39;');
+                const safeDiffPct = String(diffPct || 0);
+                const safeLastCrawled = String(pageData.last_run_at || '');
+                const safeStatus = String(status || 'unknown');
+                const safeJobStatus = String(jobStatus || 'unknown');
+                const safeRunTimestamp = String(runTimestamp || 'current');
+                
+                return `
+                    <div class="${buttonClass}"
+                         style="${cursor} display: flex; flex-direction: column; align-items: center; padding: 0.25rem; min-width: 35px;"
+                         title="${titleText}"
+                         data-page-id="${safePageId}"
+                         data-page-name="${safePageName}"
+                         data-page-path="${safePagePath}"
+                         data-viewport="${viewport.key}"
+                         data-diff-pct="${safeDiffPct}"
+                         data-last-crawled="${safeLastCrawled}"
+                         data-status="${safeStatus}"
+                         data-job-status="${safeJobStatus}"
+                         data-run-timestamp="${safeRunTimestamp}"
+                         onclick="openRunHistoryImageModal('${safePagePath}', '${viewport.key}', '${safeRunTimestamp}')">
+                        <span class="viewport-emoji" style="font-size: 1.1rem; margin-bottom: 0.125rem;">${viewport.emoji}</span>
+                        <small style="color: ${diffColor}; font-weight: 600; font-size: 0.625rem;">${diffText}</small>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // Update table header to show it's filtered for run-centric history
+        function updateTableHeaderForRunHistory(jobNumber, pageCount, runId) {
+            // Target the DISCOVERED PAGES section specifically
+            const discoveredPagesSection = document.getElementById('discovered-pages-section');
+            if (!discoveredPagesSection) {
+                console.error('❌ Discovered pages section not found for header update');
+                return;
+            }
+            
+            const tableTitle = discoveredPagesSection.querySelector('.table-card-title');
+            if (tableTitle) {
+                // Store original title if not already stored
+                if (!window.originalTableTitle) {
+                    window.originalTableTitle = tableTitle.innerHTML;
+                }
+                
+                tableTitle.innerHTML = `
+                    <i class="fas fa-history"></i>Job #${jobNumber} Run History (${runId})
+                    <span class="status-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-color);">${pageCount}</span>
+                `;
+            }
+        }
+        
+        // Open run history image modal for specific job run
+        function openRunHistoryImageModal(pagePath, viewport, runTimestamp) {
+            console.log(`🖼️ Opening run history image modal for run ${runTimestamp}, page: ${pagePath}, viewport: ${viewport}`);
+            
+            // Generate proper page slug for asset resolver
+            let pageSlug = pagePath || '/';
+            
+            // Handle root path
+            if (pageSlug === '/' || pageSlug === '') {
+                pageSlug = 'home';
+            } else {
+                // Remove leading/trailing slashes and convert to slug
+                pageSlug = pageSlug.replace(/^\/+|\/+$/g, '');
+                // Replace slashes with dashes and normalize
+                pageSlug = pageSlug.replace(/\//g, '-').replace(/[^a-z0-9\-]/gi, '-').replace(/-+/g, '-').toLowerCase();
+                // Remove leading/trailing dashes
+                pageSlug = pageSlug.replace(/^-+|-+$/g, '');
+                // If empty after processing, use home
+                if (!pageSlug) {
+                    pageSlug = 'home';
+                }
+            }
+            
+            // Use the provided timestamp or fallback to currentRunData
+            let timestamp = runTimestamp;
+            if (!timestamp || timestamp === 'current') {
+                if (currentRunData && currentRunData.timestamp) {
+                    timestamp = currentRunData.timestamp;
+                } else {
+                    console.error('❌ No valid timestamp available for run history image modal');
+                    showToast('error', 'Unable to load images - no valid timestamp available');
+                    return;
+                }
+            }
+            
+            // Generate image URLs for the specific job run
+            const diffUrl = `/assets/runs/${currentProjectId}/${timestamp}/${viewport}/${pageSlug}-diff.png`;
+            const productionUrl = `/assets/runs/${currentProjectId}/${timestamp}/${viewport}/${pageSlug}-production.png`;
+            const stagingUrl = `/assets/runs/${currentProjectId}/${timestamp}/${viewport}/${pageSlug}-staging.png`;
+            
+            console.log('🖼️ Generated run history image URLs:', {
+                pageSlug, timestamp, diffUrl, productionUrl, stagingUrl
+            });
+            
+            // Try to open the diff image first, with fallbacks
+            const testImage = new Image();
+            testImage.onload = function() {
+                console.log('✅ Diff image loaded successfully, opening in new tab');
+                window.open(diffUrl, '_blank');
+                showToast('success', `Viewing difference image for ${pagePath} (${viewport})`);
+            };
+            testImage.onerror = function() {
+                console.warn('⚠️ Diff image not available, trying staging image');
+                // Try staging image as fallback
+                const stagingTestImage = new Image();
+                stagingTestImage.onload = function() {
+                    console.log('✅ Staging image loaded successfully, opening in new tab');
+                    window.open(stagingUrl, '_blank');
+                    showToast('info', `Viewing staging image for ${pagePath} (${viewport}) - diff not available`);
+                };
+                stagingTestImage.onerror = function() {
+                    console.warn('⚠️ Staging image not available, trying production image');
+                    // Try production image as final fallback
+                    const productionTestImage = new Image();
+                    productionTestImage.onload = function() {
+                        console.log('✅ Production image loaded successfully, opening in new tab');
+                        window.open(productionUrl, '_blank');
+                        showToast('info', `Viewing production image for ${pagePath} (${viewport}) - diff and staging not available`);
+                    };
+                    productionTestImage.onerror = function() {
+                        console.error('❌ No images available for this page/viewport combination');
+                        showToast('error', `No images available for ${pagePath} (${viewport}). The screenshots may not have been generated yet.`);
+                    };
+                    productionTestImage.src = productionUrl;
+                };
+                stagingTestImage.src = stagingUrl;
+            };
+            testImage.src = diffUrl;
         }
         
         // Replace the discovered pages table with job-specific data using new API format
@@ -5232,7 +5607,7 @@
                     if (status === 'completed' && diffPct !== null && diffPct !== undefined) {
                         diffText = `${Number(diffPct).toFixed(1)}%`;
                         diffColor = diffPct > 5 ? 'var(--danger-color)' : diffPct > 1 ? 'var(--warning-color)' : 'var(--success-color)';
-                        titleText = `${viewport.key} - ${diffPct.toFixed(2)}% difference`;
+                        titleText = `${viewport.key} - ${Number(diffPct).toFixed(2)}% difference`;
                     } else if (status === 'failed') {
                         diffText = '!';
                         diffColor = 'var(--danger-color)';
@@ -5254,7 +5629,7 @@
                     if (status === 'completed' && diffPct !== null && diffPct !== undefined) {
                         diffText = `${Number(diffPct).toFixed(1)}%`;
                         diffColor = diffPct > 5 ? 'var(--danger-color)' : diffPct > 1 ? 'var(--warning-color)' : 'var(--success-color)';
-                        titleText = `${viewport.key} - ${diffPct.toFixed(2)}% difference`;
+                        titleText = `${viewport.key} - ${Number(diffPct).toFixed(2)}% difference`;
                     } else if (status === 'failed') {
                         diffText = '!';
                         diffColor = 'var(--danger-color)';
@@ -5461,7 +5836,7 @@
                     if (status === 'completed' && diffPct !== null && diffPct !== undefined) {
                         diffText = `${Number(diffPct).toFixed(1)}%`;
                         diffColor = diffPct > 5 ? 'var(--danger-color)' : diffPct > 1 ? 'var(--warning-color)' : 'var(--success-color)';
-                        titleText = `${viewport.key} - ${diffPct > 5 ? 'Failed' : diffPct > 1 ? 'Warning' : 'Passed'} (${diffPct.toFixed(2)}% difference)`;
+                        titleText = `${viewport.key} - ${diffPct > 5 ? 'Failed' : diffPct > 1 ? 'Warning' : 'Passed'} (${Number(diffPct).toFixed(2)}% difference)`;
                     } else if (status === 'failed') {
                         diffText = '!';
                         diffColor = 'var(--danger-color)';

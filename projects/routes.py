@@ -1409,6 +1409,98 @@ def register_project_routes(app, crawler_scheduler):
                 'message': f'Failed to get job pages: {str(e)}'
             }), 500
     
+    @app.route('/api/projects/<int:project_id>/jobs/<int:job_number>/resolve')
+    @login_required
+    def resolve_job_to_run(project_id, job_number):
+        """Resolve job_id to run_id for history retrieval - KEY ENDPOINT FOR THE FIX"""
+        try:
+            # Verify project access
+            project = Project.query.filter_by(
+                id=project_id,
+                user_id=current_user.id
+            ).first()
+            
+            if not project:
+                return jsonify({
+                    'success': False,
+                    'error': 'Project not found or access denied'
+                }), 404
+            
+            # Get job by job number
+            from models.crawl_job import CrawlJob
+            job = CrawlJob.query.filter_by(
+                project_id=project_id,
+                job_number=job_number
+            ).first()
+            
+            if not job:
+                return jsonify({
+                    'success': False,
+                    'error': f'Job #{job_number} not found'
+                }), 404
+            
+            # Get run_id from project pages that were updated during this job's execution
+            # Strategy: Find pages with current_run_id that were last updated around the job's timeframe
+            run_id = None
+            
+            # First, try to get run_id from any page that was updated during this job
+            if job.crawl_completed_at or job.completed_at or job.updated_at:
+                # Use the most specific completion timestamp
+                job_timestamp = job.crawl_completed_at or job.completed_at or job.updated_at
+                
+                # Find pages that have a current_run_id and were updated around this job's time
+                # Look for pages updated within a reasonable window around the job completion
+                from datetime import timedelta
+                time_window = timedelta(hours=1)  # 1 hour window
+                
+                page_with_run = ProjectPage.query.filter(
+                    ProjectPage.project_id == project_id,
+                    ProjectPage.current_run_id.isnot(None),
+                    ProjectPage.last_run_at >= job_timestamp - time_window,
+                    ProjectPage.last_run_at <= job_timestamp + time_window
+                ).first()
+                
+                if page_with_run and page_with_run.current_run_id:
+                    run_id = page_with_run.current_run_id
+            
+            # Fallback: Get the most recent run_id from any page in the project
+            if not run_id:
+                recent_page = ProjectPage.query.filter(
+                    ProjectPage.project_id == project_id,
+                    ProjectPage.current_run_id.isnot(None)
+                ).order_by(ProjectPage.last_run_at.desc()).first()
+                
+                if recent_page and recent_page.current_run_id:
+                    run_id = recent_page.current_run_id
+            
+            # If still no run_id, generate one based on job timestamp for compatibility
+            if not run_id and (job.crawl_completed_at or job.completed_at or job.updated_at):
+                job_timestamp = job.crawl_completed_at or job.completed_at or job.updated_at
+                run_id = job_timestamp.strftime('%Y%m%d-%H%M%S')
+            
+            if not run_id:
+                return jsonify({
+                    'success': False,
+                    'error': f'No run_id found for job #{job_number}. Job may not have completed successfully.'
+                }), 404
+            
+            return jsonify({
+                'success': True,
+                'project_id': project_id,
+                'job_number': job_number,
+                'job_id': job.id,
+                'run_id': run_id,
+                'job_status': job.status,
+                'job_type': job.job_type or 'crawl'
+            })
+            
+        except Exception as e:
+            app.logger.error(f"Error resolving job {job_number} to run_id for project {project_id}: {str(e)}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to resolve job to run: {str(e)}'
+            }), 500
+    
     @app.route('/api/projects/status')
     @login_required
     def get_projects_status():
