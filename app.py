@@ -857,6 +857,9 @@ def _register_routes(app: Flask):
     def root():
         return redirect(url_for('login'))
     
+    # Register dashboard route first (needed by auth routes)
+    create_dashboard_routes(app)
+    
     # Register route modules with corrected module names
     route_modules = [
         ('auth.routes', 'register_routes', 'Auth routes'),
@@ -1006,7 +1009,6 @@ def initialize_app():
     
     if app is None:
         app = create_app()
-        create_dashboard_routes(app)
         crawler_scheduler = getattr(app, 'crawler_scheduler', None)
         
         logger.info("Application initialized successfully")
