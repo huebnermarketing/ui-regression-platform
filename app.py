@@ -812,10 +812,7 @@ def create_app(testing: bool = False) -> Flask:
     # Configure Jinja2 filters
     _configure_jinja_filters(app)
     
-    # Register routes
-    _register_routes(app)
-    
-    # Initialize crawler scheduler
+    # Initialize crawler scheduler BEFORE registering routes
     try:
         crawler_scheduler = CrawlerScheduler(app)
         app.crawler_scheduler = crawler_scheduler
@@ -823,6 +820,9 @@ def create_app(testing: bool = False) -> Flask:
     except Exception as e:
         logger.warning(f"Scheduler initialization failed: {e}")
         app.crawler_scheduler = None
+    
+    # Register routes AFTER scheduler is initialized
+    _register_routes(app)
     
     return app
 
