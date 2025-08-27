@@ -23,6 +23,7 @@ load_dotenv()
 
 # Import db for Flask-Migrate compatibility
 from models import db
+from crawler.scheduler import CrawlerScheduler
 
 # Configure logging
 logging.basicConfig(
@@ -432,7 +433,7 @@ class WebCrawler:
 # CRAWLER SCHEDULER
 # ============================================================================
 
-class CrawlerScheduler:
+class CrawlerScheduler_old:
     """Enhanced crawler scheduler with job management and progress tracking."""
     
     def __init__(self, app):
