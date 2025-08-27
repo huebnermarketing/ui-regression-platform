@@ -876,7 +876,7 @@ def _register_routes(app: Flask):
             register_func = getattr(module, function_name)
             
             # Some routes need scheduler parameter
-            if 'project' in module_name.lower() or 'run_state' in module_name.lower():
+            if 'projects' in module_name.lower() or 'run_state' in module_name.lower():
                 if hasattr(app, 'crawler_scheduler') and app.crawler_scheduler:
                     register_func(app, app.crawler_scheduler)
                 else:
